@@ -76,12 +76,14 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date" }: Dat
       </div>
       <Popover.Portal>
         <Popover.Content
-          className="bg-white rounded-xl shadow-lg border border-slate-200 p-4 z-50"
+          className="z-50 rounded-lg border border-slate-100 bg-white p-3 shadow-lg"
           align="start"
           sideOffset={5}
         >
           <DayPicker
             mode="single"
+            fixedWeeks
+            showOutsideDays
             selected={value}
             month={month}
             onMonthChange={setMonth}

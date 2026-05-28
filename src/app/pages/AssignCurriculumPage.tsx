@@ -11,15 +11,28 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import { DatePicker } from "../components/DatePicker";
 import { getCurriculums, saveCurriculum } from "../lib/curriculumStorage";
 import { getAssignmentsForCurriculum, getSchools, saveAssignment } from "../lib/schoolStorage";
+
+function parseStoredDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatStoredDate(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function formatDisplayDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(parseStoredDate(value));
 }
 
 export function AssignCurriculumPage() {
@@ -27,7 +40,7 @@ export function AssignCurriculumPage() {
   const navigate = useNavigate();
   const [selectedSchool, setSelectedSchool] = useState("");
   const [selectedCurriculum, setSelectedCurriculum] = useState(id || "");
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
+  const [effectiveDate, setEffectiveDate] = useState<Date | undefined>(new Date());
   const [notes, setNotes] = useState("");
   const [schoolSearch, setSchoolSearch] = useState("");
   const [curriculums, setCurriculums] = useState(() => getCurriculums());
@@ -59,7 +72,7 @@ export function AssignCurriculumPage() {
   };
 
   const handleAssign = () => {
-    if (!curriculum || !school) {
+    if (!curriculum || !school || !effectiveDate) {
       return;
     }
 
@@ -70,7 +83,7 @@ export function AssignCurriculumPage() {
       curriculumName: curriculum.name,
       curriculumCode: curriculum.code,
       assignedDate: new Date().toISOString().split("T")[0],
-      effectiveDate,
+      effectiveDate: formatStoredDate(effectiveDate),
       notes: notes.trim() || undefined,
       status: "Active",
     });
@@ -118,7 +131,7 @@ export function AssignCurriculumPage() {
               </button>
               <button
                 onClick={handleAssign}
-                disabled={!selectedSchool || !selectedCurriculum}
+                disabled={!selectedSchool || !selectedCurriculum || !effectiveDate}
                 className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
@@ -258,11 +271,10 @@ export function AssignCurriculumPage() {
             <div className="mt-5 space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Effective Date</label>
-                <input
-                  type="date"
+                <DatePicker
                   value={effectiveDate}
-                  onChange={(event) => setEffectiveDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={setEffectiveDate}
+                  placeholder="Select effective date"
                 />
               </div>
 
@@ -291,7 +303,9 @@ export function AssignCurriculumPage() {
                 </div>
                 <div className="flex items-start gap-2">
                   <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
-                  <span>Effective {formatDisplayDate(effectiveDate)}</span>
+                  <span>
+                    {effectiveDate ? `Effective ${formatDisplayDate(formatStoredDate(effectiveDate))}` : "Choose an effective date"}
+                  </span>
                 </div>
               </div>
             </div>
