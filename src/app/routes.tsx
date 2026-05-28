@@ -4,6 +4,7 @@ import { CurriculumListPage } from "./pages/CurriculumListPage";
 import { CreateCurriculumWizard } from "./pages/CreateCurriculumWizard";
 import { CurriculumDetailPage } from "./pages/CurriculumDetailPage";
 import { AssignCurriculumPage } from "./pages/AssignCurriculumPage";
+import { SchoolDetailPage } from "./pages/SchoolDetailPage";
 import { SchoolsPage } from "./pages/SchoolsPage";
 
 export const router = createBrowserRouter([
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: "curriculums/:id", Component: CurriculumDetailPage },
       { path: "curriculums/:id/assign", Component: AssignCurriculumPage },
       { path: "schools", Component: SchoolsPage },
+      { path: "schools/:id", Component: SchoolDetailPage },
       { path: "assignments", Component: () => <div className="p-8 text-slate-600">Assignments page coming soon</div> },
       { path: "settings", Component: () => <div className="p-8 text-slate-600">Settings page coming soon</div> },
     ],
