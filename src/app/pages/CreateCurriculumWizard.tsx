@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { ChevronRight, Plus, GripVertical, X, Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { DatePicker } from "../components/DatePicker";
-import { saveCurriculum } from "../lib/curriculumStorage";
+import { getCurriculumById, saveCurriculum } from "../lib/curriculumStorage";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -52,23 +52,62 @@ const AVAILABLE_COURSES = [
   { name: "Religious Education", code: "RE" },
 ];
 
+function parseSavedDate(value: string | undefined) {
+  return value ? new Date(value) : undefined;
+}
+
 export function CreateCurriculumWizard() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const existingCurriculum = id ? getCurriculumById(id) : undefined;
+  const isEditing = Boolean(existingCurriculum);
   const [currentStep, setCurrentStep] = useState<Step>(1);
 
   const [basicInfo, setBasicInfo] = useState({
-    name: "",
-    code: "",
-    version: "",
-    description: "",
-    year: "",
-    startDate: undefined as Date | undefined,
-    endDate: undefined as Date | undefined,
+    name: existingCurriculum?.name || "",
+    code: existingCurriculum?.code || "",
+    version: existingCurriculum?.version || "",
+    description: existingCurriculum?.description || "",
+    year: existingCurriculum?.year || "",
+    startDate: parseSavedDate(existingCurriculum?.startDate),
+    endDate: parseSavedDate(existingCurriculum?.endDate),
   });
 
-  const [terms, setTerms] = useState<Term[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [terms, setTerms] = useState<Term[]>(
+    () =>
+      existingCurriculum?.structure.map((term, index) => ({
+        id: term.id,
+        name: term.name,
+        order: index,
+        startDate: parseSavedDate(term.startDate),
+        endDate: parseSavedDate(term.endDate),
+      })) || []
+  );
+  const [classes, setClasses] = useState<Class[]>(
+    () =>
+      existingCurriculum?.structure.flatMap((term) =>
+        term.classes.map((cls, index) => ({
+          id: cls.id,
+          termId: term.id,
+          name: cls.name,
+          order: index,
+        }))
+      ) || []
+  );
+  const [courses, setCourses] = useState<Course[]>(
+    () =>
+      existingCurriculum?.structure.flatMap((term) =>
+        term.classes.flatMap((cls) =>
+          cls.courses.map((course) => ({
+            id: course.id,
+            classId: cls.id,
+            name: course.name,
+            code: course.code,
+            description: course.description || "",
+          }))
+        )
+      ) || []
+  );
   const [selectedClassForCourse, setSelectedClassForCourse] = useState<string>("");
   const [selectedCourseName, setSelectedCourseName] = useState<string>("");
 
@@ -130,14 +169,14 @@ export function CreateCurriculumWizard() {
   };
 
   const handleSave = () => {
-    const newCurriculum = {
-      id: `curriculum-${Date.now()}`,
+    const savedCurriculum = {
+      id: existingCurriculum?.id || `curriculum-${Date.now()}`,
       name: basicInfo.name.trim() || "Untitled Curriculum",
       code: basicInfo.code.trim() || "NO-CODE",
       version: basicInfo.version.trim() || "1.0",
-      status: "Active" as const,
-      schools: 0,
-      createdAt: new Date().toISOString().split("T")[0],
+      status: existingCurriculum?.status || "Active" as const,
+      schools: existingCurriculum?.schools || 0,
+      createdAt: existingCurriculum?.createdAt || new Date().toISOString().split("T")[0],
       description: basicInfo.description.trim() || "No description provided",
       year: basicInfo.year.trim() || undefined,
       startDate: basicInfo.startDate?.toISOString(),
@@ -164,16 +203,37 @@ export function CreateCurriculumWizard() {
       })),
     };
 
-    saveCurriculum(newCurriculum);
+    saveCurriculum(savedCurriculum);
     navigate("/curriculums");
   };
+
+  if (id && !existingCurriculum) {
+    return (
+      <div className="min-h-full bg-slate-50 p-8">
+        <div className="bg-white border border-slate-200 rounded-2xl p-8 max-w-2xl">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Curriculum not found</h1>
+          <p className="text-slate-600 mb-6">This curriculum may have been removed or was not saved correctly.</p>
+          <button
+            onClick={() => navigate("/curriculums")}
+            className="px-4 py-2.5 bg-[#1B50B8] hover:bg-[#2563EB] text-white rounded-xl font-medium transition-colors"
+          >
+            Back to Curriculums
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-slate-50">
       <div className="bg-white border-b border-slate-200">
         <div className="px-8 py-6">
-          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Create New Curriculum</h1>
-          <p className="text-sm text-slate-600">Build a reusable curriculum template</p>
+          <h1 className="text-2xl font-semibold text-slate-900 mb-2">
+            {isEditing ? "Edit Curriculum" : "Create New Curriculum"}
+          </h1>
+          <p className="text-sm text-slate-600">
+            {isEditing ? "Update this curriculum template" : "Build a reusable curriculum template"}
+          </p>
         </div>
       </div>
 
@@ -661,7 +721,7 @@ export function CreateCurriculumWizard() {
                 className="flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors"
               >
                 <Check className="w-5 h-5" />
-                Save Curriculum
+                {isEditing ? "Save Changes" : "Save Curriculum"}
               </button>
             )}
           </div>
