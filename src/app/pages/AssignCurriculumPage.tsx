@@ -49,7 +49,7 @@ export function AssignCurriculumPage() {
     }
 
     setAssignmentHistory(getAssignmentsForCurriculum(selectedCurriculum));
-    navigate(`/curriculums/${selectedCurriculum}`);
+    navigate(`/curriculums/${selectedCurriculum}/edit`);
   };
 
   return (
@@ -57,7 +57,7 @@ export function AssignCurriculumPage() {
       <div className="bg-white border-b border-slate-200">
         <div className="px-8 py-6">
           <button
-            onClick={() => navigate(`/curriculums/${id}`)}
+            onClick={() => navigate(id ? `/curriculums/${id}/edit` : "/curriculums")}
             className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -133,7 +133,7 @@ export function AssignCurriculumPage() {
 
           <div className="flex gap-3 mt-8">
             <button
-              onClick={() => navigate(`/curriculums/${id}`)}
+              onClick={() => navigate(id ? `/curriculums/${id}/edit` : "/curriculums")}
               className="flex-1 px-6 py-3 border border-slate-300 rounded-xl font-medium hover:bg-slate-50 transition-colors"
             >
               Cancel

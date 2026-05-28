@@ -14,6 +14,7 @@ export const router = createBrowserRouter([
       { index: true, Component: CurriculumListPage },
       { path: "curriculums", Component: CurriculumListPage },
       { path: "curriculums/create", Component: CreateCurriculumWizard },
+      { path: "curriculums/:id/edit", Component: CreateCurriculumWizard },
       { path: "curriculums/:id", Component: CurriculumDetailPage },
       { path: "curriculums/:id/assign", Component: AssignCurriculumPage },
       { path: "schools", Component: SchoolsPage },
