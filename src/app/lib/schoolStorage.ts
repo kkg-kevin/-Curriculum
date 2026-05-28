@@ -20,8 +20,21 @@ export interface SchoolAssignment {
   status: "Active" | "Inactive";
 }
 
+export interface SupplementaryCourse {
+  id: string;
+  schoolId: string;
+  curriculumId: string;
+  termId?: string;
+  classId?: string;
+  name: string;
+  code: string;
+  description?: string;
+  createdAt: string;
+}
+
 const SCHOOLS_STORAGE_KEY = "digifunzii.schools";
 const ASSIGNMENTS_STORAGE_KEY = "digifunzii.schoolAssignments";
+const SUPPLEMENTARY_COURSES_STORAGE_KEY = "digifunzii.supplementaryCourses";
 
 export const defaultSchools: School[] = [
   {
@@ -140,6 +153,28 @@ export function getAssignmentsForCurriculum(curriculumId: string | undefined) {
 
 export function getAssignmentsForSchool(schoolId: string) {
   return getAssignments().filter((assignment) => assignment.schoolId === schoolId);
+}
+
+export function getSupplementaryCourses() {
+  return readFromStorage<SupplementaryCourse[]>(SUPPLEMENTARY_COURSES_STORAGE_KEY, []);
+}
+
+export function getSupplementaryCoursesForSchool(schoolId: string) {
+  return getSupplementaryCourses().filter((course) => course.schoolId === schoolId);
+}
+
+export function saveSupplementaryCourse(course: SupplementaryCourse) {
+  const courses = getSupplementaryCourses();
+  const nextCourses = [
+    course,
+    ...courses.filter((item) => item.id !== course.id),
+  ];
+
+  if (canUseStorage()) {
+    window.localStorage.setItem(SUPPLEMENTARY_COURSES_STORAGE_KEY, JSON.stringify(nextCourses));
+  }
+
+  return nextCourses;
 }
 
 export function saveAssignment(assignment: SchoolAssignment) {

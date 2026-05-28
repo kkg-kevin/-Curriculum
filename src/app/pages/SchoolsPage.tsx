@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Building2, MapPin, Search, Users, BookOpen, UserRound } from "lucide-react";
+import { Link } from "react-router";
+import { Building2, MapPin, Search, Users, BookOpen, UserRound, Eye } from "lucide-react";
 import { getAssignments, getSchools } from "../lib/schoolStorage";
 
 export function SchoolsPage() {
@@ -86,6 +87,13 @@ export function SchoolsPage() {
                     </div>
                   </div>
                 </div>
+                <Link
+                  to={`/schools/${school.id}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  <Eye className="h-4 w-4" />
+                  Open
+                </Link>
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-5">

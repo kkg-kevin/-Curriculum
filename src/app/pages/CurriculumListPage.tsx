@@ -94,7 +94,7 @@ export function CurriculumListPage() {
                     <DropdownMenu.Content className="min-w-48 bg-white rounded-xl shadow-lg border border-slate-200 p-1 z-50">
                       <DropdownMenu.Item asChild>
                         <Link
-                          to={`/curriculums/${curriculum.id}/edit`}
+                          to={`/curriculums/${curriculum.id}`}
                           className="flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer outline-none"
                         >
                           <Eye className="w-4 h-4" />

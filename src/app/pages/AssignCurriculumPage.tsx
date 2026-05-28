@@ -1,9 +1,26 @@
-import { useState } from "react";
-import { useParams, useNavigate } from "react-router";
-import { ChevronLeft, Check, Building2, Calendar } from "lucide-react";
-import * as Select from "@radix-ui/react-select";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+import {
+  ArrowLeft,
+  BookOpen,
+  Building2,
+  Calendar,
+  Check,
+  CheckCircle2,
+  MapPin,
+  Search,
+  Users,
+} from "lucide-react";
 import { getCurriculums, saveCurriculum } from "../lib/curriculumStorage";
 import { getAssignmentsForCurriculum, getSchools, saveAssignment } from "../lib/schoolStorage";
+
+function formatDisplayDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
 
 export function AssignCurriculumPage() {
   const { id } = useParams();
@@ -12,22 +29,39 @@ export function AssignCurriculumPage() {
   const [selectedCurriculum, setSelectedCurriculum] = useState(id || "");
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
-  const [curriculums] = useState(() => getCurriculums());
+  const [schoolSearch, setSchoolSearch] = useState("");
+  const [curriculums, setCurriculums] = useState(() => getCurriculums());
   const [schools] = useState(() => getSchools());
   const [assignmentHistory, setAssignmentHistory] = useState(() => getAssignmentsForCurriculum(id));
 
-  const handleAssign = () => {
-    const curriculum = curriculums.find((item) => item.id === selectedCurriculum);
-    const school = schools.find((item) => item.id === selectedSchool);
+  const curriculum = curriculums.find((item) => item.id === selectedCurriculum);
+  const school = schools.find((item) => item.id === selectedSchool);
 
+  const activeAssignments = assignmentHistory.filter((assignment) => assignment.status === "Active");
+  const alreadyAssigned = activeAssignments.some((assignment) => assignment.schoolId === selectedSchool);
+
+  const filteredSchools = useMemo(() => {
+    const query = schoolSearch.trim().toLowerCase();
+
+    return schools.filter((item) => {
+      if (!query) {
+        return true;
+      }
+
+      return [item.name, item.location, item.level, item.principal].join(" ").toLowerCase().includes(query);
+    });
+  }, [schoolSearch, schools]);
+
+  const handleCurriculumChange = (value: string) => {
+    setSelectedCurriculum(value);
+    setSelectedSchool("");
+    setAssignmentHistory(getAssignmentsForCurriculum(value));
+  };
+
+  const handleAssign = () => {
     if (!curriculum || !school) {
       return;
     }
-
-    const previousAssignments = getAssignmentsForCurriculum(selectedCurriculum);
-    const wasAlreadyAssigned = previousAssignments.some(
-      (assignment) => assignment.schoolId === selectedSchool && assignment.status === "Active"
-    );
 
     saveAssignment({
       id: `assignment-${Date.now()}`,
@@ -41,159 +75,279 @@ export function AssignCurriculumPage() {
       status: "Active",
     });
 
-    if (!wasAlreadyAssigned) {
-      saveCurriculum({
+    if (!alreadyAssigned) {
+      const updatedCurriculum = {
         ...curriculum,
         schools: curriculum.schools + 1,
-      });
+      };
+
+      saveCurriculum(updatedCurriculum);
+      setCurriculums((items) => items.map((item) => (item.id === updatedCurriculum.id ? updatedCurriculum : item)));
     }
 
-    setAssignmentHistory(getAssignmentsForCurriculum(selectedCurriculum));
-    navigate(`/curriculums/${selectedCurriculum}/edit`);
+    setAssignmentHistory(getAssignmentsForCurriculum(curriculum.id));
+    navigate(`/curriculums/${curriculum.id}`);
   };
 
   return (
     <div className="min-h-full bg-slate-50">
-      <div className="bg-white border-b border-slate-200">
+      <div className="border-b border-slate-200 bg-white">
         <div className="px-8 py-6">
-          <button
-            onClick={() => navigate(id ? `/curriculums/${id}/edit` : "/curriculums")}
-            className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 mb-4 transition-colors"
+          <Link
+            to={id ? `/curriculums/${id}` : "/curriculums"}
+            className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             Back to Curriculum
-          </button>
+          </Link>
 
-          <h1 className="text-2xl font-semibold text-slate-900 mb-2">Assign Curriculum to School</h1>
-          <p className="text-sm text-slate-600">Deploy a curriculum template to a school</p>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-950">Assign Curriculum to School</h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Choose a curriculum, select a school, and set when it should become active.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => navigate(id ? `/curriculums/${id}` : "/curriculums")}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssign}
+                disabled={!selectedSchool || !selectedCurriculum}
+                className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Check className="h-4 w-4" />
+                Assign
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-8 py-8">
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-6">Assignment Details</h2>
-
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Select Curriculum</label>
-              <select
-                value={selectedCurriculum}
-                onChange={(e) => {
-                  setSelectedCurriculum(e.target.value);
-                  setAssignmentHistory(getAssignmentsForCurriculum(e.target.value));
-                }}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              >
-                <option value="">Choose a curriculum...</option>
-                {curriculums.map((curriculum) => (
-                  <option key={curriculum.id} value={curriculum.id}>
-                    {curriculum.name} ({curriculum.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Select School</label>
-              <select
-                value={selectedSchool}
-                onChange={(e) => setSelectedSchool(e.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              >
-                <option value="">Choose a school...</option>
-                {schools.map((school) => (
-                  <option key={school.id} value={school.id}>
-                    {school.name} - {school.location}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Effective Date</label>
-              <input
-                type="date"
-                value={effectiveDate}
-                onChange={(event) => setEffectiveDate(event.target.value)}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Notes (Optional)</label>
-              <textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Add any notes about this assignment..."
-                rows={3}
-                className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-8">
-            <button
-              onClick={() => navigate(id ? `/curriculums/${id}/edit` : "/curriculums")}
-              className="flex-1 px-6 py-3 border border-slate-300 rounded-xl font-medium hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAssign}
-              disabled={!selectedSchool || !selectedCurriculum}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Check className="w-5 h-5" />
-              Assign Curriculum
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-8">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Assignment History</h2>
-          <p className="text-sm text-slate-600 mb-6">Recent curriculum assignments for this template</p>
-
-          <div className="space-y-3">
-            {assignmentHistory.map((assignment) => {
-              const school = schools.find((item) => item.id === assignment.schoolId);
-
-              return (
-              <div
-                key={assignment.id}
-                className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{school?.name || "Unknown school"}</p>
-                    <div className="flex items-center gap-2 text-sm text-slate-500 mt-0.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Assigned {assignment.assignedDate}
-                    </div>
-                  </div>
-                </div>
-                <span className={`
-                  px-3 py-1 rounded-lg text-xs font-medium
-                  ${assignment.status === "Active"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-slate-100 text-slate-600"
-                  }
-                `}>
-                  {assignment.status}
-                </span>
+      <div className="grid grid-cols-1 gap-6 p-8 xl:grid-cols-[1fr_360px]">
+        <main className="space-y-6">
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-slate-950">Curriculum</h2>
+                <p className="mt-1 text-sm text-slate-500">The selected template will be deployed to the school.</p>
               </div>
-              );
-            })}
-          </div>
-
-          {assignmentHistory.length === 0 && (
-            <div className="text-center py-8 text-slate-500">
-              <p>No assignment history yet</p>
+              {curriculum && (
+                <span
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                    curriculum.status === "Active" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {curriculum.status}
+                </span>
+              )}
             </div>
-          )}
-        </div>
+
+            <label className="mb-2 block text-sm font-medium text-slate-700">Select Curriculum</label>
+            <select
+              value={selectedCurriculum}
+              onChange={(event) => handleCurriculumChange(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Choose a curriculum...</option>
+              {curriculums.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.code})
+                </option>
+              ))}
+            </select>
+
+            {curriculum && (
+              <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Code</p>
+                  <p className="mt-1 font-mono text-sm text-slate-900">{curriculum.code}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Version</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{curriculum.version}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Schools</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{curriculum.schools} assigned</p>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="font-semibold text-slate-950">Select School</h2>
+                <p className="mt-1 text-sm text-slate-500">Search by name, location, level, or principal.</p>
+              </div>
+              <div className="relative w-full lg:w-80">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={schoolSearch}
+                  onChange={(event) => setSchoolSearch(event.target.value)}
+                  placeholder="Search schools..."
+                  className="w-full rounded-lg border border-slate-300 py-2.5 pl-10 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {filteredSchools.map((item) => {
+                const isSelected = item.id === selectedSchool;
+                const isAssigned = activeAssignments.some((assignment) => assignment.schoolId === item.id);
+
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setSelectedSchool(item.id)}
+                    className={`rounded-lg border p-4 text-left transition-colors ${
+                      isSelected
+                        ? "border-[#1B50B8] bg-blue-50"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${
+                          isSelected ? "bg-[#1B50B8] text-white" : "bg-blue-50 text-[#1B50B8]"
+                        }`}
+                      >
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">{item.name}</p>
+                            <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
+                              <MapPin className="h-3.5 w-3.5" />
+                              {item.location}
+                            </p>
+                          </div>
+                          {isSelected && <CheckCircle2 className="h-5 w-5 shrink-0 text-[#1B50B8]" />}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                          <span className="rounded-md bg-white px-2 py-1">{item.level}</span>
+                          <span className="rounded-md bg-white px-2 py-1">{item.students} students</span>
+                          {isAssigned && <span className="rounded-md bg-green-100 px-2 py-1 text-green-700">Assigned</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {filteredSchools.length === 0 && (
+              <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                No schools match your search.
+              </div>
+            )}
+          </section>
+        </main>
+
+        <aside className="space-y-6">
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <h2 className="font-semibold text-slate-950">Assignment Details</h2>
+            <div className="mt-5 space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Effective Date</label>
+                <input
+                  type="date"
+                  value={effectiveDate}
+                  onChange={(event) => setEffectiveDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Notes</label>
+                <textarea
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="Optional deployment notes..."
+                  rows={4}
+                  className="w-full resize-none rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-700">Ready to assign</p>
+              <div className="mt-3 space-y-3 text-sm text-slate-600">
+                <div className="flex items-start gap-2">
+                  <BookOpen className="mt-0.5 h-4 w-4 text-slate-400" />
+                  <span>{curriculum?.name || "Choose a curriculum"}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Building2 className="mt-0.5 h-4 w-4 text-slate-400" />
+                  <span>{school?.name || "Choose a school"}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
+                  <span>Effective {formatDisplayDate(effectiveDate)}</span>
+                </div>
+              </div>
+            </div>
+
+            {alreadyAssigned && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                This school already has an active assignment for this curriculum. Assigning again will update the existing record.
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-6">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-slate-950">Assignment History</h2>
+                <p className="mt-1 text-sm text-slate-500">{activeAssignments.length} active assignment{activeAssignments.length === 1 ? "" : "s"}</p>
+              </div>
+              <Users className="h-5 w-5 text-slate-400" />
+            </div>
+
+            <div className="space-y-3">
+              {assignmentHistory.map((assignment) => {
+                const assignedSchool = schools.find((item) => item.id === assignment.schoolId);
+
+                return (
+                  <div key={assignment.id} className="rounded-lg border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-900">{assignedSchool?.name || "Unknown school"}</p>
+                        <p className="mt-1 text-sm text-slate-500">{assignedSchool?.location || "Location unavailable"}</p>
+                      </div>
+                      <span
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                          assignment.status === "Active" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {assignment.status}
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-1 text-xs text-slate-500">
+                      <p>Assigned {formatDisplayDate(assignment.assignedDate)}</p>
+                      <p>Effective {formatDisplayDate(assignment.effectiveDate)}</p>
+                    </div>
+                    {assignment.notes && <p className="mt-3 text-sm text-slate-600">{assignment.notes}</p>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {assignmentHistory.length === 0 && (
+              <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                No assignment history yet.
+              </div>
+            )}
+          </section>
+        </aside>
       </div>
     </div>
   );
