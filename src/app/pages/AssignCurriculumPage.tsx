@@ -39,7 +39,7 @@ export function AssignCurriculumPage() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [selectedSchool, setSelectedSchool] = useState("");
+  const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
   const [selectedCurriculum, setSelectedCurriculum] = useState(id || "");
   const [effectiveDate, setEffectiveDate] = useState<Date | undefined>(new Date());
   const [notes, setNotes] = useState("");
@@ -49,12 +49,14 @@ export function AssignCurriculumPage() {
   const [assignmentHistory, setAssignmentHistory] = useState(() => getAssignmentsForCurriculum(id));
 
   const curriculum = curriculums.find((item) => item.id === selectedCurriculum);
-  const school = schools.find((item) => item.id === selectedSchool);
+  const selectedSchools = schools.filter((item) => selectedSchoolIds.includes(item.id));
   const fromAssignments = location.pathname.startsWith("/assignments");
   const backTarget = fromAssignments ? "/assignments" : id ? `/curriculums/${id}` : "/curriculums";
 
   const activeAssignments = assignmentHistory.filter((assignment) => assignment.status === "Active");
-  const alreadyAssigned = activeAssignments.some((assignment) => assignment.schoolId === selectedSchool);
+  const selectedAlreadyAssigned = activeAssignments.filter((assignment) =>
+    selectedSchoolIds.includes(assignment.schoolId)
+  );
 
   const filteredSchools = useMemo(() => {
     const query = schoolSearch.trim().toLowerCase();
@@ -70,31 +72,44 @@ export function AssignCurriculumPage() {
 
   const handleCurriculumChange = (value: string) => {
     setSelectedCurriculum(value);
-    setSelectedSchool("");
+    setSelectedSchoolIds([]);
     setAssignmentHistory(getAssignmentsForCurriculum(value));
   };
 
+  const toggleSchoolSelection = (schoolId: string) => {
+    setSelectedSchoolIds((items) =>
+      items.includes(schoolId) ? items.filter((item) => item !== schoolId) : [...items, schoolId]
+    );
+  };
+
   const handleAssign = () => {
-    if (!curriculum || !school || !effectiveDate) {
+    if (!curriculum || selectedSchools.length === 0 || !effectiveDate) {
       return;
     }
 
-    saveAssignment({
-      id: `assignment-${Date.now()}`,
-      schoolId: school.id,
-      curriculumId: curriculum.id,
-      curriculumName: curriculum.name,
-      curriculumCode: curriculum.code,
-      assignedDate: new Date().toISOString().split("T")[0],
-      effectiveDate: formatStoredDate(effectiveDate),
-      notes: notes.trim() || undefined,
-      status: "Active",
+    const activeSchoolIds = new Set(activeAssignments.map((assignment) => assignment.schoolId));
+    const newAssignmentCount = selectedSchools.filter((item) => !activeSchoolIds.has(item.id)).length;
+    const assignedDate = new Date().toISOString().split("T")[0];
+    const storedEffectiveDate = formatStoredDate(effectiveDate);
+
+    selectedSchools.forEach((item, index) => {
+      saveAssignment({
+        id: `assignment-${Date.now()}-${index}`,
+        schoolId: item.id,
+        curriculumId: curriculum.id,
+        curriculumName: curriculum.name,
+        curriculumCode: curriculum.code,
+        assignedDate,
+        effectiveDate: storedEffectiveDate,
+        notes: notes.trim() || undefined,
+        status: "Active",
+      });
     });
 
-    if (!alreadyAssigned) {
+    if (newAssignmentCount > 0) {
       const updatedCurriculum = {
         ...curriculum,
-        schools: curriculum.schools + 1,
+        schools: curriculum.schools + newAssignmentCount,
       };
 
       saveCurriculum(updatedCurriculum);
@@ -119,9 +134,9 @@ export function AssignCurriculumPage() {
 
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-950">Assign Curriculum to School</h1>
+              <h1 className="text-2xl font-semibold text-slate-950">Assign Curriculum to Schools</h1>
               <p className="mt-1 text-sm text-slate-600">
-                Choose a curriculum, select a school, and set when it should become active.
+                Choose a curriculum, select one or more schools, and set when it should become active.
               </p>
             </div>
 
@@ -134,11 +149,11 @@ export function AssignCurriculumPage() {
               </button>
               <button
                 onClick={handleAssign}
-                disabled={!selectedSchool || !selectedCurriculum || !effectiveDate}
+                disabled={selectedSchoolIds.length === 0 || !selectedCurriculum || !effectiveDate}
                 className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
-                Assign
+                Assign {selectedSchoolIds.length > 1 ? `${selectedSchoolIds.length} Schools` : ""}
               </button>
             </div>
           </div>
@@ -151,7 +166,7 @@ export function AssignCurriculumPage() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h2 className="font-semibold text-slate-950">Curriculum</h2>
-                <p className="mt-1 text-sm text-slate-500">The selected template will be deployed to the school.</p>
+                <p className="mt-1 text-sm text-slate-500">The selected template will be deployed to each selected school.</p>
               </div>
               {curriculum && (
                 <span
@@ -199,8 +214,10 @@ export function AssignCurriculumPage() {
           <section className="rounded-lg border border-slate-200 bg-white p-6">
             <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="font-semibold text-slate-950">Select School</h2>
-                <p className="mt-1 text-sm text-slate-500">Search by name, location, level, or principal.</p>
+                <h2 className="font-semibold text-slate-950">Select Schools</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Search by name, location, level, or principal. Select multiple schools before assigning.
+                </p>
               </div>
               <div className="relative w-full lg:w-80">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -216,13 +233,13 @@ export function AssignCurriculumPage() {
 
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
               {filteredSchools.map((item) => {
-                const isSelected = item.id === selectedSchool;
+                const isSelected = selectedSchoolIds.includes(item.id);
                 const isAssigned = activeAssignments.some((assignment) => assignment.schoolId === item.id);
 
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setSelectedSchool(item.id)}
+                    onClick={() => toggleSchoolSelection(item.id)}
                     className={`rounded-lg border p-4 text-left transition-colors ${
                       isSelected
                         ? "border-[#1B50B8] bg-blue-50"
@@ -302,7 +319,11 @@ export function AssignCurriculumPage() {
                 </div>
                 <div className="flex items-start gap-2">
                   <Building2 className="mt-0.5 h-4 w-4 text-slate-400" />
-                  <span>{school?.name || "Choose a school"}</span>
+                  <span>
+                    {selectedSchools.length > 0
+                      ? `${selectedSchools.length} school${selectedSchools.length === 1 ? "" : "s"} selected`
+                      : "Choose one or more schools"}
+                  </span>
                 </div>
                 <div className="flex items-start gap-2">
                   <Calendar className="mt-0.5 h-4 w-4 text-slate-400" />
@@ -313,9 +334,33 @@ export function AssignCurriculumPage() {
               </div>
             </div>
 
-            {alreadyAssigned && (
+            {selectedSchools.length > 0 && (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                <p className="mb-3 text-sm font-medium text-slate-700">Selected schools</p>
+                <div className="space-y-2">
+                  {selectedSchools.map((item) => {
+                    const isAssigned = activeAssignments.some((assignment) => assignment.schoolId === item.id);
+
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate text-slate-600">{item.name}</span>
+                        {isAssigned && (
+                          <span className="shrink-0 rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                            Update
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {selectedAlreadyAssigned.length > 0 && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                This school already has an active assignment for this curriculum. Assigning again will update the existing record.
+                {selectedAlreadyAssigned.length} selected school{selectedAlreadyAssigned.length === 1 ? "" : "s"} already
+                {selectedAlreadyAssigned.length === 1 ? " has" : " have"} this curriculum. Assigning again will update
+                {selectedAlreadyAssigned.length === 1 ? " that record" : " those records"}.
               </div>
             )}
           </section>
