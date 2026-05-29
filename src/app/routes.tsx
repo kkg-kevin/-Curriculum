@@ -1,9 +1,11 @@
 import { createBrowserRouter } from "react-router";
 import { Layout } from "./components/Layout";
+import { DashboardPage } from "./pages/DashboardPage";
 import { CurriculumListPage } from "./pages/CurriculumListPage";
 import { CreateCurriculumWizard } from "./pages/CreateCurriculumWizard";
 import { CurriculumDetailPage } from "./pages/CurriculumDetailPage";
 import { AssignCurriculumPage } from "./pages/AssignCurriculumPage";
+import { AssignmentsPage } from "./pages/AssignmentsPage";
 import { SchoolDetailPage } from "./pages/SchoolDetailPage";
 import { SchoolsPage } from "./pages/SchoolsPage";
 
@@ -12,7 +14,7 @@ export const router = createBrowserRouter([
     path: "/",
     Component: Layout,
     children: [
-      { index: true, Component: CurriculumListPage },
+      { index: true, Component: DashboardPage },
       { path: "curriculums", Component: CurriculumListPage },
       { path: "curriculums/create", Component: CreateCurriculumWizard },
       { path: "curriculums/:id/edit", Component: CreateCurriculumWizard },
@@ -20,7 +22,8 @@ export const router = createBrowserRouter([
       { path: "curriculums/:id/assign", Component: AssignCurriculumPage },
       { path: "schools", Component: SchoolsPage },
       { path: "schools/:id", Component: SchoolDetailPage },
-      { path: "assignments", Component: () => <div className="p-8 text-slate-600">Assignments page coming soon</div> },
+      { path: "assignments", Component: AssignmentsPage },
+      { path: "assignments/create", Component: AssignCurriculumPage },
       { path: "settings", Component: () => <div className="p-8 text-slate-600">Settings page coming soon</div> },
     ],
   },

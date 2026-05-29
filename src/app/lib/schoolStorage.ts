@@ -193,3 +193,33 @@ export function saveAssignment(assignment: SchoolAssignment) {
 
   return nextAssignments;
 }
+
+export function removeAssignmentFromSchool(schoolId: string, curriculumId: string) {
+  const assignments = getAssignments();
+  const nextAssignments = assignments.map((assignment) =>
+    assignment.schoolId === schoolId &&
+    assignment.curriculumId === curriculumId &&
+    assignment.status === "Active"
+      ? { ...assignment, status: "Inactive" as const }
+      : assignment
+  );
+
+  if (canUseStorage()) {
+    window.localStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(nextAssignments));
+  }
+
+  return nextAssignments;
+}
+
+export function updateAssignmentStatus(assignmentId: string, status: SchoolAssignment["status"]) {
+  const assignments = getAssignments();
+  const nextAssignments = assignments.map((assignment) =>
+    assignment.id === assignmentId ? { ...assignment, status } : assignment
+  );
+
+  if (canUseStorage()) {
+    window.localStorage.setItem(ASSIGNMENTS_STORAGE_KEY, JSON.stringify(nextAssignments));
+  }
+
+  return nextAssignments;
+}

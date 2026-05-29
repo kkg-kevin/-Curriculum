@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import {
   ArrowLeft,
@@ -11,13 +11,15 @@ import {
   MapPin,
   Plus,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
-import { getCurriculumById } from "../lib/curriculumStorage";
+import { getCurriculumById, saveCurriculum } from "../lib/curriculumStorage";
 import {
   getAssignmentsForSchool,
   getSchools,
   getSupplementaryCoursesForSchool,
+  removeAssignmentFromSchool,
   saveSupplementaryCourse,
 } from "../lib/schoolStorage";
 
@@ -34,17 +36,16 @@ function formatDate(value: string) {
 export function SchoolDetailPage() {
   const { id } = useParams();
   const school = getSchools().find((item) => item.id === id);
-  const assignments = useMemo(
-    () => (id ? getAssignmentsForSchool(id).filter((assignment) => assignment.status === "Active") : []),
-    [id]
+  const [assignments, setAssignments] = useState(() =>
+    id ? getAssignmentsForSchool(id).filter((assignment) => assignment.status === "Active") : []
   );
   const [selectedCurriculumId, setSelectedCurriculumId] = useState(() => assignments[0]?.curriculumId || "");
   const [supplementaryCourses, setSupplementaryCourses] = useState(() =>
     id ? getSupplementaryCoursesForSchool(id) : []
   );
   const [scope, setScope] = useState<CourseScope>("school");
-  const [selectedTermId, setSelectedTermId] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [description, setDescription] = useState("");
@@ -74,8 +75,6 @@ export function SchoolDetailPage() {
   const selectedAssignment =
     assignments.find((assignment) => assignment.curriculumId === selectedCurriculumId) ?? assignments[0];
   const selectedCurriculum = getCurriculumById(selectedAssignment?.curriculumId);
-  const selectedTerm = selectedCurriculum?.structure.find((term) => term.id === selectedTermId);
-  const selectedClass = selectedTerm?.classes.find((cls) => cls.id === selectedClassId);
   const coursesForSelectedCurriculum = supplementaryCourses.filter(
     (course) => course.curriculumId === selectedAssignment?.curriculumId
   );
@@ -90,6 +89,64 @@ export function SchoolDetailPage() {
         className: cls.name,
       }))
     ) ?? [];
+
+  const courseOptions =
+    selectedCurriculum?.structure.flatMap((term) =>
+      term.classes.flatMap((cls) =>
+        cls.courses.map((course) => ({
+          ...course,
+          termId: term.id,
+          termName: term.name,
+          classId: cls.id,
+          className: cls.name,
+        }))
+      )
+    ) ?? [];
+
+  const availableCourseOptions =
+    scope === "class"
+      ? courseOptions.filter((course) => course.classId === selectedClassId)
+      : courseOptions;
+
+  const resetCourseFields = () => {
+    setSelectedCourseId("");
+    setCourseName("");
+    setCourseCode("");
+    setDescription("");
+  };
+
+  const handleCourseSelect = (courseId: string) => {
+    setSelectedCourseId(courseId);
+
+    const course = availableCourseOptions.find((option) => option.id === courseId);
+    setCourseName(course?.name || "");
+    setCourseCode(course?.code || "");
+    setDescription(course?.description || "");
+  };
+
+  const handleRemoveCurriculum = () => {
+    if (!selectedAssignment) {
+      return;
+    }
+
+    const nextAssignments = removeAssignmentFromSchool(school.id, selectedAssignment.curriculumId).filter(
+      (assignment) => assignment.schoolId === school.id && assignment.status === "Active"
+    );
+
+    const removedCurriculum = getCurriculumById(selectedAssignment.curriculumId);
+    if (removedCurriculum) {
+      saveCurriculum({
+        ...removedCurriculum,
+        schools: Math.max(0, removedCurriculum.schools - 1),
+      });
+    }
+
+    setAssignments(nextAssignments);
+    const nextSelectedCurriculumId = nextAssignments[0]?.curriculumId || "";
+    setSelectedCurriculumId(nextSelectedCurriculumId);
+    setSelectedClassId("");
+    resetCourseFields();
+  };
 
   const handleAddSupplementaryCourse = () => {
     if (!selectedAssignment || !courseName.trim() || !courseCode.trim()) {
@@ -115,6 +172,7 @@ export function SchoolDetailPage() {
     setCourseName("");
     setCourseCode("");
     setDescription("");
+    setSelectedCourseId("");
   };
 
   return (
@@ -175,8 +233,8 @@ export function SchoolDetailPage() {
                   value={selectedAssignment?.curriculumId || ""}
                   onChange={(event) => {
                     setSelectedCurriculumId(event.target.value);
-                    setSelectedTermId("");
                     setSelectedClassId("");
+                    resetCourseFields();
                   }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 lg:w-80"
                 >
@@ -203,13 +261,20 @@ export function SchoolDetailPage() {
                       <p className="font-semibold text-slate-950">{selectedAssignment.curriculumName}</p>
                       <p className="mt-1 font-mono text-xs text-slate-500">{selectedAssignment.curriculumCode}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
                       <span className="rounded-md bg-white px-2.5 py-1">
                         Effective {formatDate(selectedAssignment.effectiveDate)}
                       </span>
                       <span className="rounded-md bg-white px-2.5 py-1">
                         {selectedCurriculum.structure.length} terms
                       </span>
+                      <button
+                        onClick={handleRemoveCurriculum}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1 font-medium text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -322,7 +387,11 @@ export function SchoolDetailPage() {
                   ].map((option) => (
                     <button
                       key={option.value}
-                      onClick={() => setScope(option.value as CourseScope)}
+                      onClick={() => {
+                        setScope(option.value as CourseScope);
+                        setSelectedClassId("");
+                        resetCourseFields();
+                      }}
                       className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                         scope === option.value
                           ? "border-[#1B50B8] bg-blue-50 text-[#1B50B8]"
@@ -341,9 +410,8 @@ export function SchoolDetailPage() {
                   <select
                     value={selectedClassId}
                     onChange={(event) => {
-                      const option = classOptions.find((item) => item.classId === event.target.value);
                       setSelectedClassId(event.target.value);
-                      setSelectedTermId(option?.termId || "");
+                      resetCourseFields();
                     }}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -356,6 +424,25 @@ export function SchoolDetailPage() {
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Choose Course</label>
+                <select
+                  value={selectedCourseId}
+                  onChange={(event) => handleCourseSelect(event.target.value)}
+                  disabled={!selectedAssignment || (scope === "class" && !selectedClassId)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="">
+                    {scope === "class" && !selectedClassId ? "Choose a class first..." : "Choose a course..."}
+                  </option>
+                  {availableCourseOptions.map((course) => (
+                    <option key={`${course.termId}-${course.classId}-${course.id}`} value={course.id}>
+                      {course.name} ({course.code}) - {course.className}, {course.termName}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Course Name</label>
