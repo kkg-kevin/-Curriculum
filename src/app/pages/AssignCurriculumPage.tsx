@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   BookOpen,
@@ -37,6 +37,7 @@ function formatDisplayDate(value: string) {
 
 export function AssignCurriculumPage() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [selectedSchool, setSelectedSchool] = useState("");
   const [selectedCurriculum, setSelectedCurriculum] = useState(id || "");
@@ -49,6 +50,8 @@ export function AssignCurriculumPage() {
 
   const curriculum = curriculums.find((item) => item.id === selectedCurriculum);
   const school = schools.find((item) => item.id === selectedSchool);
+  const fromAssignments = location.pathname.startsWith("/assignments");
+  const backTarget = fromAssignments ? "/assignments" : id ? `/curriculums/${id}` : "/curriculums";
 
   const activeAssignments = assignmentHistory.filter((assignment) => assignment.status === "Active");
   const alreadyAssigned = activeAssignments.some((assignment) => assignment.schoolId === selectedSchool);
@@ -99,7 +102,7 @@ export function AssignCurriculumPage() {
     }
 
     setAssignmentHistory(getAssignmentsForCurriculum(curriculum.id));
-    navigate(`/curriculums/${curriculum.id}`);
+    navigate(fromAssignments ? "/assignments" : `/curriculums/${curriculum.id}`);
   };
 
   return (
@@ -107,11 +110,11 @@ export function AssignCurriculumPage() {
       <div className="border-b border-slate-200 bg-white">
         <div className="px-8 py-6">
           <Link
-            to={id ? `/curriculums/${id}` : "/curriculums"}
+            to={backTarget}
             className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Curriculum
+            {fromAssignments ? "Assignments" : "Back to Curriculum"}
           </Link>
 
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -124,7 +127,7 @@ export function AssignCurriculumPage() {
 
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => navigate(id ? `/curriculums/${id}` : "/curriculums")}
+                onClick={() => navigate(backTarget)}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-50"
               >
                 Cancel
