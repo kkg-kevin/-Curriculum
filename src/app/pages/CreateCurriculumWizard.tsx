@@ -53,11 +53,13 @@ const AVAILABLE_COURSES = [
   {name: "L1.1 Coding, AI and Robotics", code: "L1.1"},
   {name: "L2.1 Coding, AI and Robotics", code: "L2.1"},
   {name: "L3.1 Coding, AI and Robotics", code: "L3.1"},
-  {name: "L2.1 Coding, AI and Robotics", code: "L2.1"},
+
+  {name: "L1.2 Coding, AI and Robotics", code: "L1.2"},
   {name: "L2.2 Coding, AI and Robotics", code: "L2.2"},
-  {name: "L2.3 Coding, AI and Robotics", code: "L2.3"},
-  {name: "L3.1 Coding, AI and Robotics", code: "L3.1"},
-  {name: "L3.2 Coding, AI and Robotics", code: "L3.2"},
+  {name: "L3.2 Coding, AI and Robotics", code: "L3.2"}, 
+
+  {name: "L1.3 Coding, AI and Robotics", code: "1.3"},
+  {name: "L2.3 Coding, AI and Robotics", code: "L2.3"},       
   {name: "L3.3 Coding, AI and Robotics", code: "L3.3"},
 ];
 
