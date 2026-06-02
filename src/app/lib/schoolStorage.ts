@@ -20,21 +20,49 @@ export interface SchoolAssignment {
   status: "Active" | "Inactive";
 }
 
-export interface SupplementaryCourse {
+export interface Student {
   id: string;
   schoolId: string;
-  curriculumId: string;
-  termId?: string;
   classId?: string;
+  name: string;
+  admissionNumber?: string;
+  status: "Active" | "Inactive";
+}
+
+export type SupplementaryCurriculumType = "complementary" | "substitute";
+export type SupplementaryCurriculumScope = "school" | "class" | "student";
+
+export interface SupplementaryCurriculumCourse {
+  id: string;
   name: string;
   code: string;
   description?: string;
+}
+
+export interface SupplementaryCurriculum {
+  id: string;
+  schoolId: string;
+  baseCurriculumId: string;
+  type: SupplementaryCurriculumType;
+  scope: SupplementaryCurriculumScope;
+  termId: string;
+  classId?: string;
+  studentId?: string;
+  replacesCourseId?: string;
+  name: string;
+  code: string;
+  description?: string;
+  courses: SupplementaryCurriculumCourse[];
+  effectiveDate: string;
+  status: "Active" | "Inactive";
   createdAt: string;
 }
 
 const SCHOOLS_STORAGE_KEY = "digifunzii.schools";
 const ASSIGNMENTS_STORAGE_KEY = "digifunzii.schoolAssignments";
+const STUDENTS_STORAGE_KEY = "digifunzii.students";
 const SUPPLEMENTARY_COURSES_STORAGE_KEY = "digifunzii.supplementaryCourses";
+const SUPPLEMENTARY_CURRICULUMS_STORAGE_KEY = "digifunzii.supplementaryCurriculums";
 
 export const defaultSchools: School[] = [
   {
@@ -117,6 +145,49 @@ const defaultAssignments: SchoolAssignment[] = [
   },
 ];
 
+const defaultStudents: Student[] = [
+  {
+    id: "stu-s1-1",
+    schoolId: "s1",
+    classId: "c1",
+    name: "Amani Njoroge",
+    admissionNumber: "GA-001",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-2",
+    schoolId: "s1",
+    classId: "c1",
+    name: "Brian Otieno",
+    admissionNumber: "GA-002",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-3",
+    schoolId: "s1",
+    classId: "c2",
+    name: "Neema Wambui",
+    admissionNumber: "GA-003",
+    status: "Active",
+  },
+  {
+    id: "stu-s3-1",
+    schoolId: "s3",
+    classId: "c1",
+    name: "Zuri Achieng",
+    admissionNumber: "SHS-001",
+    status: "Active",
+  },
+  {
+    id: "stu-s3-2",
+    schoolId: "s3",
+    classId: "c2",
+    name: "David Mwangi",
+    admissionNumber: "SHS-002",
+    status: "Active",
+  },
+];
+
 function canUseStorage() {
   return typeof window !== "undefined" && Boolean(window.localStorage);
 }
@@ -155,26 +226,90 @@ export function getAssignmentsForSchool(schoolId: string) {
   return getAssignments().filter((assignment) => assignment.schoolId === schoolId);
 }
 
-export function getSupplementaryCourses() {
-  return readFromStorage<SupplementaryCourse[]>(SUPPLEMENTARY_COURSES_STORAGE_KEY, []);
+export function getStudents() {
+  return readFromStorage<Student[]>(STUDENTS_STORAGE_KEY, defaultStudents);
 }
 
-export function getSupplementaryCoursesForSchool(schoolId: string) {
-  return getSupplementaryCourses().filter((course) => course.schoolId === schoolId);
+export function getStudentsForSchool(schoolId: string) {
+  return getStudents().filter((student) => student.schoolId === schoolId && student.status === "Active");
 }
 
-export function saveSupplementaryCourse(course: SupplementaryCourse) {
-  const courses = getSupplementaryCourses();
-  const nextCourses = [
-    course,
-    ...courses.filter((item) => item.id !== course.id),
+function migrateSupplementaryCourses(): SupplementaryCurriculum[] {
+  const legacyCourses = readFromStorage<
+    Array<{
+      id: string;
+      schoolId: string;
+      curriculumId: string;
+      termId?: string;
+      classId?: string;
+      name: string;
+      code: string;
+      description?: string;
+      createdAt: string;
+    }>
+  >(SUPPLEMENTARY_COURSES_STORAGE_KEY, []);
+
+  return legacyCourses.map((course) => ({
+    id: course.id,
+    schoolId: course.schoolId,
+    baseCurriculumId: course.curriculumId,
+    type: "substitute" as const,
+    scope: course.classId ? ("class" as const) : ("school" as const),
+    termId: course.termId || "all",
+    classId: course.classId,
+    name: course.name,
+    code: course.code,
+    description: course.description,
+    courses: [
+      {
+        id: `${course.id}-course`,
+        name: course.name,
+        code: course.code,
+        description: course.description,
+      },
+    ],
+    effectiveDate: course.createdAt,
+    status: "Active" as const,
+    createdAt: course.createdAt,
+  }));
+}
+
+export function getSupplementaryCurriculums() {
+  if (!canUseStorage()) {
+    return [];
+  }
+
+  const saved = window.localStorage.getItem(SUPPLEMENTARY_CURRICULUMS_STORAGE_KEY);
+  if (!saved) {
+    const migrated = migrateSupplementaryCourses();
+    window.localStorage.setItem(SUPPLEMENTARY_CURRICULUMS_STORAGE_KEY, JSON.stringify(migrated));
+    return migrated;
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as SupplementaryCurriculum[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getSupplementaryCurriculumsForSchool(schoolId: string) {
+  return getSupplementaryCurriculums().filter((curriculum) => curriculum.schoolId === schoolId);
+}
+
+export function saveSupplementaryCurriculum(curriculum: SupplementaryCurriculum) {
+  const curriculums = getSupplementaryCurriculums();
+  const nextCurriculums = [
+    curriculum,
+    ...curriculums.filter((item) => item.id !== curriculum.id),
   ];
 
   if (canUseStorage()) {
-    window.localStorage.setItem(SUPPLEMENTARY_COURSES_STORAGE_KEY, JSON.stringify(nextCourses));
+    window.localStorage.setItem(SUPPLEMENTARY_CURRICULUMS_STORAGE_KEY, JSON.stringify(nextCurriculums));
   }
 
-  return nextCourses;
+  return nextCurriculums;
 }
 
 export function saveAssignment(assignment: SchoolAssignment) {
