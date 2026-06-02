@@ -14,7 +14,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { getCurriculumById, saveCurriculum } from "../lib/curriculumStorage";
+import { getCurriculums, getCurriculumById, saveCurriculum, type CurriculumCourse } from "../lib/curriculumStorage";
 import {
   getAssignmentsForSchool,
   getSchools,
@@ -72,8 +72,7 @@ export function SchoolDetailPage() {
   const [selectedTermId, setSelectedTermId] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [selectedReplacedCourseId, setSelectedReplacedCourseId] = useState("");
-  const [curriculumName, setCurriculumName] = useState("");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [description, setDescription] = useState("");
@@ -130,30 +129,31 @@ export function SchoolDetailPage() {
 
   const termOptions = selectedCurriculum?.structure ?? [];
 
-  const courseOptions =
-    selectedCurriculum?.structure.flatMap((term) =>
-      term.classes.flatMap((cls) =>
-        cls.courses.map((course) => ({
-          ...course,
-          termId: term.id,
-          termName: term.name,
-          classId: cls.id,
-          className: cls.name,
-        }))
-      )
-    ) ?? [];
+  const systemCourseOptions = getCurriculums().reduce<Array<CurriculumCourse & { sourceCurriculumName: string }>>(
+    (courses, curriculum) => {
+      curriculum.structure.forEach((term) => {
+        term.classes.forEach((cls) => {
+          cls.courses.forEach((course) => {
+            const exists = courses.some(
+              (item) =>
+                item.code.toLocaleLowerCase() === course.code.toLocaleLowerCase() &&
+                item.name.toLocaleLowerCase() === course.name.toLocaleLowerCase()
+            );
 
-  const replacementCourseOptions = courseOptions.filter((course) => {
-    if (!selectedTermId || course.termId !== selectedTermId) {
-      return false;
-    }
+            if (!exists) {
+              courses.push({
+                ...course,
+                sourceCurriculumName: curriculum.name,
+              });
+            }
+          });
+        });
+      });
 
-    if ((scope === "class" || scope === "student") && selectedClassId) {
-      return course.classId === selectedClassId;
-    }
-
-    return true;
-  });
+      return courses;
+    },
+    []
+  );
 
   const getTargetLabel = (curriculum: SupplementaryCurriculum) => {
     if (curriculum.scope === "school") {
@@ -169,18 +169,9 @@ export function SchoolDetailPage() {
     return option ? option.className : "Specific class";
   };
 
-  const getReplacementLabel = (curriculum: SupplementaryCurriculum) => {
-    if (curriculum.type !== "complementary" || !curriculum.replacesCourseId) {
-      return undefined;
-    }
-
-    const replacedCourse = courseOptions.find((course) => course.id === curriculum.replacesCourseId);
-    return replacedCourse ? `Replaces ${replacedCourse.name}` : "Replaces selected course";
-  };
-
   const getCurriculumsForClass = (termId: string, classId: string) =>
     activeSupplementaryCurriculums.filter((curriculum) => {
-      if (curriculum.termId !== termId) {
+      if (curriculum.termId !== "all" && curriculum.termId !== termId) {
         return false;
       }
 
@@ -197,8 +188,7 @@ export function SchoolDetailPage() {
     });
 
   const resetCourseFields = () => {
-    setSelectedReplacedCourseId("");
-    setCurriculumName("");
+    setSelectedCourseId("");
     setCourseName("");
     setCourseCode("");
     setDescription("");
@@ -207,7 +197,14 @@ export function SchoolDetailPage() {
   const resetTargetFields = () => {
     setSelectedClassId("");
     setSelectedStudentId("");
-    setSelectedReplacedCourseId("");
+  };
+
+  const handleCourseSelect = (courseId: string) => {
+    setSelectedCourseId(courseId);
+
+    const course = systemCourseOptions.find((item) => item.id === courseId);
+    setCourseName(course?.name || "");
+    setCourseCode(course?.code || "");
   };
 
   const handleRemoveCurriculum = () => {
@@ -236,7 +233,9 @@ export function SchoolDetailPage() {
   };
 
   const handleAddSupplementaryCurriculum = () => {
-    if (!selectedAssignment || !selectedTermId || !courseName.trim() || !courseCode.trim()) {
+    const termId = scope === "school" && supplementaryType === "complementary" ? "all" : selectedTermId;
+
+    if (!selectedAssignment || !termId || !selectedCourseId || !courseName.trim() || !courseCode.trim()) {
       return;
     }
 
@@ -248,10 +247,6 @@ export function SchoolDetailPage() {
       return;
     }
 
-    if (supplementaryType === "complementary" && !selectedReplacedCourseId) {
-      return;
-    }
-
     const prefix = supplementaryType === "complementary" ? "Complementary" : "Substitute";
 
     const nextCurriculums = saveSupplementaryCurriculum({
@@ -260,11 +255,10 @@ export function SchoolDetailPage() {
       baseCurriculumId: selectedAssignment.curriculumId,
       type: supplementaryType,
       scope,
-      termId: selectedTermId,
+      termId,
       classId: scope === "class" || scope === "student" ? selectedClass?.id : undefined,
       studentId: scope === "student" ? selectedStudentId : undefined,
-      replacesCourseId: supplementaryType === "complementary" ? selectedReplacedCourseId : undefined,
-      name: curriculumName.trim() || `${prefix} - ${courseName.trim()}`,
+      name: `${prefix} - ${courseName.trim()}`,
       code: courseCode.trim(),
       description: description.trim() || undefined,
       courses: [
@@ -281,11 +275,10 @@ export function SchoolDetailPage() {
     });
 
     setSupplementaryCurriculums(nextCurriculums.filter((curriculum) => curriculum.schoolId === school.id));
-    setCurriculumName("");
+    setSelectedCourseId("");
     setCourseName("");
     setCourseCode("");
     setDescription("");
-    setSelectedReplacedCourseId("");
   };
 
   return (
@@ -411,9 +404,6 @@ export function SchoolDetailPage() {
                               {formatSupplementaryType(curriculum.type)}
                             </span>
                           </div>
-                          {getReplacementLabel(curriculum) && (
-                            <p className="mt-2 text-xs font-medium text-amber-700">{getReplacementLabel(curriculum)}</p>
-                          )}
                           {curriculum.description && (
                             <p className="mt-2 text-sm text-slate-600">{curriculum.description}</p>
                           )}
@@ -438,13 +428,6 @@ export function SchoolDetailPage() {
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       {term.classes.map((cls) => {
                         const classSupplementaryCurriculums = getCurriculumsForClass(term.id, cls.id);
-                        const complementaryCurriculums = classSupplementaryCurriculums.filter(
-                          (curriculum) => curriculum.type === "complementary"
-                        );
-                        const substituteCurriculums = classSupplementaryCurriculums.filter(
-                          (curriculum) => curriculum.type === "substitute"
-                        );
-
                         return (
                           <div key={cls.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                             <div className="mb-4 flex items-center justify-between gap-3">
@@ -458,69 +441,45 @@ export function SchoolDetailPage() {
                             </div>
 
                             <div className="space-y-2">
-                              {cls.courses.map((course) => {
-                                const replacements = complementaryCurriculums.filter(
-                                  (curriculum) => curriculum.replacesCourseId === course.id
-                                );
-                                const isReplaced = replacements.length > 0;
-
-                                return (
-                                  <div
-                                    key={course.id}
-                                    className={`rounded-lg border px-3 py-2 ${
-                                      isReplaced ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"
-                                    }`}
-                                  >
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <CheckCircle2
-                                        className={`h-4 w-4 ${isReplaced ? "text-amber-500" : "text-slate-400"}`}
-                                      />
-                                      <p className="text-sm font-medium text-slate-800">{course.name}</p>
-                                      <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-500">
-                                        {course.code}
-                                      </span>
-                                      {isReplaced && (
-                                        <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                                          Replaced
-                                        </span>
-                                      )}
-                                    </div>
-                                    {replacements.map((curriculum) => (
-                                      <div
-                                        key={curriculum.id}
-                                        className="mt-2 rounded-md border border-amber-200 bg-white px-3 py-2"
-                                      >
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <Sparkles className="h-4 w-4 text-amber-600" />
-                                          <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
-                                          <span className="rounded-md bg-amber-100 px-2 py-0.5 font-mono text-xs text-amber-700">
-                                            {curriculum.code}
-                                          </span>
-                                          <span className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
-                                            {getTargetLabel(curriculum)}
-                                          </span>
-                                        </div>
-                                        {curriculum.courses.map((replacementCourse) => (
-                                          <p key={replacementCourse.id} className="mt-1 pl-6 text-sm text-slate-700">
-                                            {replacementCourse.name} ({replacementCourse.code})
-                                          </p>
-                                        ))}
-                                      </div>
-                                    ))}
+                              {cls.courses.map((course) => (
+                                <div key={course.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <CheckCircle2 className="h-4 w-4 text-slate-400" />
+                                    <p className="text-sm font-medium text-slate-800">{course.name}</p>
+                                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-500">
+                                      {course.code}
+                                    </span>
                                   </div>
-                                );
-                              })}
+                                </div>
+                              ))}
 
-                              {substituteCurriculums.map((curriculum) => (
+                              {classSupplementaryCurriculums.map((curriculum) => (
                                 <div
                                   key={curriculum.id}
-                                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2"
+                                  className={`rounded-lg border bg-white px-3 py-2 ${
+                                    curriculum.type === "complementary"
+                                      ? "border-blue-200"
+                                      : "border-emerald-200"
+                                  }`}
                                 >
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-emerald-600" />
+                                    <Sparkles
+                                      className={`h-4 w-4 ${
+                                        curriculum.type === "complementary" ? "text-blue-600" : "text-emerald-600"
+                                      }`}
+                                    />
                                     <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
-                                    <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-mono text-xs text-emerald-700">
+                                    <span
+                                      className={`rounded-md px-2 py-0.5 font-mono text-xs ${
+                                        curriculum.type === "complementary"
+                                          ? "bg-blue-100 text-blue-700"
+                                          : "bg-emerald-100 text-emerald-700"
+                                      }`}
+                                    >
                                       {curriculum.code}
+                                    </span>
+                                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                      {formatSupplementaryType(curriculum.type)}
                                     </span>
                                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                                       {getTargetLabel(curriculum)}
@@ -572,7 +531,7 @@ export function SchoolDetailPage() {
                       key={option.value}
                       onClick={() => {
                         setSupplementaryType(option.value as SupplementaryType);
-                        setSelectedReplacedCourseId("");
+                        resetCourseFields();
                       }}
                       className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
                         supplementaryType === option.value
@@ -613,26 +572,28 @@ export function SchoolDetailPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Term</label>
-                <select
-                  value={selectedTermId}
-                  onChange={(event) => {
-                    setSelectedTermId(event.target.value);
-                    resetTargetFields();
-                    resetCourseFields();
-                  }}
-                  disabled={!selectedAssignment}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                >
-                  <option value="">Choose a term...</option>
-                  {termOptions.map((term) => (
-                    <option key={term.id} value={term.id}>
-                      {term.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {!(scope === "school" && supplementaryType === "complementary") && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Term</label>
+                  <select
+                    value={selectedTermId}
+                    onChange={(event) => {
+                      setSelectedTermId(event.target.value);
+                      resetTargetFields();
+                      resetCourseFields();
+                    }}
+                    disabled={!selectedAssignment}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">Choose a term...</option>
+                    {termOptions.map((term) => (
+                      <option key={term.id} value={term.id}>
+                        {term.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {(scope === "class" || scope === "student") && (
                 <div>
@@ -677,37 +638,21 @@ export function SchoolDetailPage() {
                 </div>
               )}
 
-              {supplementaryType === "complementary" && (
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Replace Course</label>
-                  <select
-                    value={selectedReplacedCourseId}
-                    onChange={(event) => setSelectedReplacedCourseId(event.target.value)}
-                    disabled={
-                      !selectedTermId ||
-                      ((scope === "class" || scope === "student") && !selectedClassId)
-                    }
-                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                  >
-                    <option value="">Choose a default course...</option>
-                    {replacementCourseOptions.map((course) => (
-                      <option key={`${course.termId}-${course.classId}-${course.id}`} value={course.id}>
-                        {course.name} ({course.code}) - {course.className}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Curriculum Name</label>
-                <input
-                  type="text"
-                  value={curriculumName}
-                  onChange={(event) => setCurriculumName(event.target.value)}
-                  placeholder="e.g., Term 1 Robotics Track"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="mb-2 block text-sm font-medium text-slate-700">Course</label>
+                <select
+                  value={selectedCourseId}
+                  onChange={(event) => handleCourseSelect(event.target.value)}
+                  disabled={!selectedAssignment || systemCourseOptions.length === 0}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="">Choose a system course...</option>
+                  {systemCourseOptions.map((course) => (
+                    <option key={`${course.id}-${course.code}`} value={course.id}>
+                      {course.name} ({course.code}) - {course.sourceCurriculumName}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -715,9 +660,9 @@ export function SchoolDetailPage() {
                 <input
                   type="text"
                   value={courseName}
-                  onChange={(event) => setCourseName(event.target.value)}
-                  placeholder="e.g., Robotics"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  readOnly
+                  placeholder="Selected course name"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-slate-700"
                 />
               </div>
 
@@ -726,9 +671,9 @@ export function SchoolDetailPage() {
                 <input
                   type="text"
                   value={courseCode}
-                  onChange={(event) => setCourseCode(event.target.value)}
-                  placeholder="e.g., ROB-7"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  readOnly
+                  placeholder="Selected course code"
+                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-slate-700"
                 />
               </div>
 
@@ -747,12 +692,12 @@ export function SchoolDetailPage() {
                 onClick={handleAddSupplementaryCurriculum}
                 disabled={
                   !selectedAssignment ||
-                  !selectedTermId ||
+                  (!(scope === "school" && supplementaryType === "complementary") && !selectedTermId) ||
+                  !selectedCourseId ||
                   !courseName.trim() ||
                   !courseCode.trim() ||
                   ((scope === "class" || scope === "student") && !selectedClassId) ||
-                  (scope === "student" && !selectedStudentId) ||
-                  (supplementaryType === "complementary" && !selectedReplacedCourseId)
+                  (scope === "student" && !selectedStudentId)
                 }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
