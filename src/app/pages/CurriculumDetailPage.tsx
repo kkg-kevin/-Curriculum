@@ -36,6 +36,10 @@ function formatDateRange(startDate?: string, endDate?: string) {
   return "Dates not set";
 }
 
+function formatMidTermRange(term: CurriculumTerm) {
+  return formatDateRange(term.midTermStartDate || term.midTermDate, term.midTermEndDate);
+}
+
 function countCourses(term: CurriculumTerm) {
   return term.classes.reduce((total, cls) => total + cls.courses.length, 0);
 }
@@ -224,6 +228,11 @@ export function CurriculumDetailPage() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-slate-900">{term.name}</p>
                           <p className="mt-1 text-xs text-slate-500">{formatDateRange(term.startDate, term.endDate)}</p>
+                          {(term.midTermStartDate || term.midTermEndDate || term.midTermDate) && (
+                            <p className="mt-1 text-xs font-medium text-blue-700">
+                              Mid-term: {formatMidTermRange(term)}
+                            </p>
+                          )}
                           <div className="mt-3 flex flex-wrap gap-2 text-xs">
                             <span className="rounded-md bg-white px-2 py-1 text-slate-600">
                               {term.classes.length} classes
@@ -247,6 +256,11 @@ export function CurriculumDetailPage() {
                     <div>
                       <h2 className="text-xl font-semibold text-slate-950">{selectedTerm.name}</h2>
                       <p className="mt-1 text-sm text-slate-500">{formatDateRange(selectedTerm.startDate, selectedTerm.endDate)}</p>
+                      {(selectedTerm.midTermStartDate || selectedTerm.midTermEndDate || selectedTerm.midTermDate) && (
+                        <p className="mt-1 text-sm font-medium text-blue-700">
+                          Mid-term: {formatMidTermRange(selectedTerm)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm">
                       <span className="rounded-md bg-slate-100 px-3 py-1.5 text-slate-700">

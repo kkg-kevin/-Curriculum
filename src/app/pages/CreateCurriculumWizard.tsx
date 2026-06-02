@@ -12,6 +12,8 @@ interface Term {
   name: string;
   order: number;
   startDate?: Date;
+  midTermStartDate?: Date;
+  midTermEndDate?: Date;
   endDate?: Date;
 }
 
@@ -67,6 +69,22 @@ function parseSavedDate(value: string | undefined) {
   return value ? new Date(value) : undefined;
 }
 
+function formatLocalDateRange(startDate?: Date, endDate?: Date) {
+  if (startDate && endDate) {
+    return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+  }
+
+  if (startDate) {
+    return `Starts ${startDate.toLocaleDateString()}`;
+  }
+
+  if (endDate) {
+    return `Ends ${endDate.toLocaleDateString()}`;
+  }
+
+  return "Dates not set";
+}
+
 export function CreateCurriculumWizard() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -91,6 +109,8 @@ export function CreateCurriculumWizard() {
         name: term.name,
         order: index,
         startDate: parseSavedDate(term.startDate),
+        midTermStartDate: parseSavedDate(term.midTermStartDate || term.midTermDate),
+        midTermEndDate: parseSavedDate(term.midTermEndDate),
         endDate: parseSavedDate(term.endDate),
       })) || []
   );
@@ -136,6 +156,8 @@ export function CreateCurriculumWizard() {
       name: "",
       order: terms.length,
       startDate: undefined,
+      midTermStartDate: undefined,
+      midTermEndDate: undefined,
       endDate: undefined
     }]);
   };
@@ -196,6 +218,8 @@ export function CreateCurriculumWizard() {
         id: term.id,
         name: term.name.trim() || `Term ${termIndex + 1}`,
         startDate: term.startDate?.toISOString(),
+        midTermStartDate: term.midTermStartDate?.toISOString(),
+        midTermEndDate: term.midTermEndDate?.toISOString(),
         endDate: term.endDate?.toISOString(),
         classes: classes
           .filter((cls) => cls.termId === term.id)
@@ -392,13 +416,29 @@ export function CreateCurriculumWizard() {
                         <X className="w-5 h-5" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 ml-14">
+                    <div className="grid grid-cols-1 gap-3 ml-14 md:grid-cols-2 xl:grid-cols-4">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
                         <DatePicker
                           value={term.startDate}
                           onChange={(date) => updateTerm(term.id, 'startDate', date)}
                           placeholder="Select start date"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Mid-Term Start</label>
+                        <DatePicker
+                          value={term.midTermStartDate}
+                          onChange={(date) => updateTerm(term.id, 'midTermStartDate', date)}
+                          placeholder="Select mid-term start"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Mid-Term End</label>
+                        <DatePicker
+                          value={term.midTermEndDate}
+                          onChange={(date) => updateTerm(term.id, 'midTermEndDate', date)}
+                          placeholder="Select mid-term end"
                         />
                       </div>
                       <div>
@@ -678,6 +718,11 @@ export function CreateCurriculumWizard() {
                           {term.startDate && term.startDate.toLocaleDateString()}
                           {term.startDate && term.endDate && " - "}
                           {term.endDate && term.endDate.toLocaleDateString()}
+                        </p>
+                      )}
+                      {(term.midTermStartDate || term.midTermEndDate) && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Mid-term: {formatLocalDateRange(term.midTermStartDate, term.midTermEndDate)}
                         </p>
                       )}
                     </div>

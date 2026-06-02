@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { format, isValid, parse } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
-import { DayPicker } from "react-day-picker";
-import * as Popover from "@radix-ui/react-popover";
-import "react-day-picker/dist/style.css";
+import dayjs, { type Dayjs } from "dayjs";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker as MuiDatePicker } from "@mui/x-date-pickers/DatePicker";
 
 interface DatePickerProps {
   value?: Date;
@@ -11,94 +10,79 @@ interface DatePickerProps {
   placeholder?: string;
 }
 
-function parseTypedDate(value: string) {
-  const trimmedValue = value.trim();
-  const formats = ["MM/dd/yyyy", "M/d/yyyy", "dd/MM/yyyy", "d/M/yyyy"];
+function toDayjs(value?: Date) {
+  return value ? dayjs(value) : null;
+}
 
-  for (const dateFormat of formats) {
-    const parsedDate = parse(trimmedValue, dateFormat, new Date());
-    if (isValid(parsedDate) && format(parsedDate, dateFormat) === trimmedValue) {
-      return parsedDate;
-    }
+function toDate(value: Dayjs | null) {
+  if (!value || !value.isValid()) {
+    return undefined;
   }
 
-  return undefined;
+  return value.startOf("day").toDate();
 }
 
 export function DatePicker({ value, onChange, placeholder = "Pick a date" }: DatePickerProps) {
-  const [open, setOpen] = useState(false);
-  const [inputValue, setInputValue] = useState(value ? format(value, "MM/dd/yyyy") : "");
-  const [month, setMonth] = useState(value || new Date());
+  const [pickerValue, setPickerValue] = useState<Dayjs | null>(() => toDayjs(value));
 
   useEffect(() => {
-    setInputValue(value ? format(value, "MM/dd/yyyy") : "");
-    if (value) {
-      setMonth(value);
-    }
+    setPickerValue(toDayjs(value));
   }, [value]);
 
-  const handleInputChange = (nextValue: string) => {
-    setInputValue(nextValue);
+  const handleChange = (nextValue: Dayjs | null) => {
+    setPickerValue(nextValue);
 
-    const typedDate = parseTypedDate(nextValue);
-    if (typedDate) {
-      setMonth(typedDate);
-      setOpen(true);
+    if (nextValue === null) {
+      onChange(undefined);
+      return;
+    }
+
+    if (nextValue.isValid()) {
+      onChange(toDate(nextValue));
     }
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <div className="relative">
-        <Popover.Trigger asChild>
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(event) => handleInputChange(event.target.value)}
-            onFocus={() => setOpen(true)}
-            onBlur={() => {
-              if (value) {
-                setInputValue(format(value, "MM/dd/yyyy"));
-              }
-            }}
-            placeholder={placeholder === "Pick a date" ? "MM/DD/YYYY" : `${placeholder} (MM/DD/YYYY)`}
-            className="w-full px-4 py-2.5 pr-11 border border-slate-300 rounded-xl hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-left text-slate-900 placeholder:text-slate-500"
-          />
-        </Popover.Trigger>
-        <button
-          type="button"
-          onClick={() => setOpen((current) => !current)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-          aria-label="Open calendar"
-        >
-          <CalendarIcon className="w-5 h-5" />
-        </button>
-      </div>
-      <Popover.Portal>
-        <Popover.Content
-          className="z-50 rounded-lg border border-slate-100 bg-white p-3 shadow-lg"
-          align="start"
-          sideOffset={5}
-        >
-          <DayPicker
-            mode="single"
-            fixedWeeks
-            showOutsideDays
-            selected={value}
-            month={month}
-            onMonthChange={setMonth}
-            onSelect={(date) => {
-              onChange(date);
-              if (date) {
-                setInputValue(format(date, "MM/dd/yyyy"));
-                setMonth(date);
-              }
-              setOpen(false);
-            }}
-            className="rdp-custom"
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <LocalizationProvider dateAdapter={AdapterDayjs}>
+      <MuiDatePicker
+        value={pickerValue}
+        onChange={handleChange}
+        format="DD/MM/YYYY"
+        slotProps={{
+          textField: {
+            fullWidth: true,
+            placeholder: placeholder === "Pick a date" ? "DD/MM/YYYY" : `${placeholder} DD/MM/YYYY`,
+            size: "small",
+            sx: {
+              "& .MuiInputBase-root": {
+                minHeight: 46,
+                borderRadius: "0.75rem",
+                backgroundColor: "#fff",
+                color: "#0f172a",
+                fontFamily: "inherit",
+                fontSize: "0.875rem",
+              },
+              "& .MuiInputBase-root:hover": {
+                backgroundColor: "#f8fafc",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#cbd5e1",
+              },
+              "& .MuiInputBase-root.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#3b82f6",
+                borderWidth: 2,
+              },
+              "& .MuiInputBase-input": {
+                padding: "0.625rem 0 0.625rem 1rem",
+              },
+              "& .MuiInputBase-input::placeholder": {
+                color: "#64748b",
+                opacity: 1,
+              },
+            },
+          },
+        }}
+      />
+    </LocalizationProvider>
   );
 }
