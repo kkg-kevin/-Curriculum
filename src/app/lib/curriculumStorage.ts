@@ -15,6 +15,9 @@ export interface CurriculumTerm {
   id: string;
   name: string;
   startDate?: string;
+  midTermStartDate?: string;
+  midTermEndDate?: string;
+  midTermDate?: string;
   endDate?: string;
   classes: CurriculumClass[];
 }

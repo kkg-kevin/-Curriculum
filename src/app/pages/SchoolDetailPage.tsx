@@ -33,6 +33,22 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatDateRange(startDate?: string, endDate?: string) {
+  if (startDate && endDate) {
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  }
+
+  if (startDate) {
+    return `Starts ${formatDate(startDate)}`;
+  }
+
+  if (endDate) {
+    return `Ends ${formatDate(endDate)}`;
+  }
+
+  return "Dates not set";
+}
+
 export function SchoolDetailPage() {
   const { id } = useParams();
   const school = getSchools().find((item) => item.id === id);
@@ -303,9 +319,14 @@ export function SchoolDetailPage() {
 
                 {selectedCurriculum.structure.map((term) => (
                   <section key={term.id} className="rounded-lg border border-slate-200 bg-white p-5">
-                    <div className="mb-4 flex items-center gap-2">
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
                       <Layers3 className="h-5 w-5 text-[#1B50B8]" />
                       <h3 className="font-semibold text-slate-950">{term.name}</h3>
+                      {(term.midTermStartDate || term.midTermEndDate || term.midTermDate) && (
+                        <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                          Mid-term: {formatDateRange(term.midTermStartDate || term.midTermDate, term.midTermEndDate)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
