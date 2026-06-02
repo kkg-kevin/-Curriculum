@@ -18,12 +18,15 @@ import { getCurriculumById, saveCurriculum } from "../lib/curriculumStorage";
 import {
   getAssignmentsForSchool,
   getSchools,
-  getSupplementaryCoursesForSchool,
+  getStudentsForSchool,
+  getSupplementaryCurriculumsForSchool,
   removeAssignmentFromSchool,
-  saveSupplementaryCourse,
+  saveSupplementaryCurriculum,
+  type SupplementaryCurriculum,
 } from "../lib/schoolStorage";
 
-type CourseScope = "school" | "class";
+type SupplementaryScope = "school" | "class" | "student";
+type SupplementaryType = "complementary" | "substitute";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -49,6 +52,10 @@ function formatDateRange(startDate?: string, endDate?: string) {
   return "Dates not set";
 }
 
+function formatSupplementaryType(type: SupplementaryType) {
+  return type === "complementary" ? "Complementary" : "Substitute";
+}
+
 export function SchoolDetailPage() {
   const { id } = useParams();
   const school = getSchools().find((item) => item.id === id);
@@ -56,12 +63,17 @@ export function SchoolDetailPage() {
     id ? getAssignmentsForSchool(id).filter((assignment) => assignment.status === "Active") : []
   );
   const [selectedCurriculumId, setSelectedCurriculumId] = useState(() => assignments[0]?.curriculumId || "");
-  const [supplementaryCourses, setSupplementaryCourses] = useState(() =>
-    id ? getSupplementaryCoursesForSchool(id) : []
+  const [supplementaryCurriculums, setSupplementaryCurriculums] = useState(() =>
+    id ? getSupplementaryCurriculumsForSchool(id) : []
   );
-  const [scope, setScope] = useState<CourseScope>("school");
+  const [students] = useState(() => (id ? getStudentsForSchool(id) : []));
+  const [supplementaryType, setSupplementaryType] = useState<SupplementaryType>("substitute");
+  const [scope, setScope] = useState<SupplementaryScope>("school");
+  const [selectedTermId, setSelectedTermId] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
-  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedReplacedCourseId, setSelectedReplacedCourseId] = useState("");
+  const [curriculumName, setCurriculumName] = useState("");
   const [courseName, setCourseName] = useState("");
   const [courseCode, setCourseCode] = useState("");
   const [description, setDescription] = useState("");
@@ -91,10 +103,20 @@ export function SchoolDetailPage() {
   const selectedAssignment =
     assignments.find((assignment) => assignment.curriculumId === selectedCurriculumId) ?? assignments[0];
   const selectedCurriculum = getCurriculumById(selectedAssignment?.curriculumId);
-  const coursesForSelectedCurriculum = supplementaryCourses.filter(
-    (course) => course.curriculumId === selectedAssignment?.curriculumId
+  const curriculumsForSelectedAssignment = supplementaryCurriculums.filter(
+    (curriculum) => curriculum.baseCurriculumId === selectedAssignment?.curriculumId
   );
-  const schoolWideCourses = coursesForSelectedCurriculum.filter((course) => !course.classId);
+  const activeSupplementaryCurriculums = curriculumsForSelectedAssignment.filter(
+    (curriculum) => curriculum.status === "Active"
+  );
+  const supplementaryCount = activeSupplementaryCurriculums.length;
+  const schoolWideCurriculums = activeSupplementaryCurriculums.filter((curriculum) => curriculum.scope === "school");
+  const selectedTerm = selectedCurriculum?.structure.find((term) => term.id === selectedTermId);
+  const classesForSelectedTerm = selectedTerm?.classes ?? [];
+  const selectedClass = classesForSelectedTerm.find((cls) => cls.id === selectedClassId);
+  const studentsForSelectedClass = students.filter(
+    (student) => !selectedClassId || student.classId === selectedClassId
+  );
 
   const classOptions =
     selectedCurriculum?.structure.flatMap((term) =>
@@ -105,6 +127,8 @@ export function SchoolDetailPage() {
         className: cls.name,
       }))
     ) ?? [];
+
+  const termOptions = selectedCurriculum?.structure ?? [];
 
   const courseOptions =
     selectedCurriculum?.structure.flatMap((term) =>
@@ -119,25 +143,71 @@ export function SchoolDetailPage() {
       )
     ) ?? [];
 
-  const availableCourseOptions =
-    scope === "class"
-      ? courseOptions.filter((course) => course.classId === selectedClassId)
-      : courseOptions;
+  const replacementCourseOptions = courseOptions.filter((course) => {
+    if (!selectedTermId || course.termId !== selectedTermId) {
+      return false;
+    }
+
+    if ((scope === "class" || scope === "student") && selectedClassId) {
+      return course.classId === selectedClassId;
+    }
+
+    return true;
+  });
+
+  const getTargetLabel = (curriculum: SupplementaryCurriculum) => {
+    if (curriculum.scope === "school") {
+      return "School-wide";
+    }
+
+    if (curriculum.scope === "student") {
+      const student = students.find((item) => item.id === curriculum.studentId);
+      return student ? student.name : "Specific student";
+    }
+
+    const option = classOptions.find((item) => item.classId === curriculum.classId);
+    return option ? option.className : "Specific class";
+  };
+
+  const getReplacementLabel = (curriculum: SupplementaryCurriculum) => {
+    if (curriculum.type !== "complementary" || !curriculum.replacesCourseId) {
+      return undefined;
+    }
+
+    const replacedCourse = courseOptions.find((course) => course.id === curriculum.replacesCourseId);
+    return replacedCourse ? `Replaces ${replacedCourse.name}` : "Replaces selected course";
+  };
+
+  const getCurriculumsForClass = (termId: string, classId: string) =>
+    activeSupplementaryCurriculums.filter((curriculum) => {
+      if (curriculum.termId !== termId) {
+        return false;
+      }
+
+      if (curriculum.scope === "school") {
+        return true;
+      }
+
+      if (curriculum.scope === "class") {
+        return curriculum.classId === classId;
+      }
+
+      const student = students.find((item) => item.id === curriculum.studentId);
+      return student?.classId === classId;
+    });
 
   const resetCourseFields = () => {
-    setSelectedCourseId("");
+    setSelectedReplacedCourseId("");
+    setCurriculumName("");
     setCourseName("");
     setCourseCode("");
     setDescription("");
   };
 
-  const handleCourseSelect = (courseId: string) => {
-    setSelectedCourseId(courseId);
-
-    const course = availableCourseOptions.find((option) => option.id === courseId);
-    setCourseName(course?.name || "");
-    setCourseCode(course?.code || "");
-    setDescription(course?.description || "");
+  const resetTargetFields = () => {
+    setSelectedClassId("");
+    setSelectedStudentId("");
+    setSelectedReplacedCourseId("");
   };
 
   const handleRemoveCurriculum = () => {
@@ -160,35 +230,62 @@ export function SchoolDetailPage() {
     setAssignments(nextAssignments);
     const nextSelectedCurriculumId = nextAssignments[0]?.curriculumId || "";
     setSelectedCurriculumId(nextSelectedCurriculumId);
-    setSelectedClassId("");
+    setSelectedTermId("");
+    resetTargetFields();
     resetCourseFields();
   };
 
-  const handleAddSupplementaryCourse = () => {
-    if (!selectedAssignment || !courseName.trim() || !courseCode.trim()) {
+  const handleAddSupplementaryCurriculum = () => {
+    if (!selectedAssignment || !selectedTermId || !courseName.trim() || !courseCode.trim()) {
       return;
     }
 
-    const targetClass =
-      scope === "class" ? classOptions.find((option) => option.classId === selectedClassId) : undefined;
+    if ((scope === "class" || scope === "student") && !selectedClassId) {
+      return;
+    }
 
-    const nextCourses = saveSupplementaryCourse({
-      id: `supplementary-${Date.now()}`,
+    if (scope === "student" && !selectedStudentId) {
+      return;
+    }
+
+    if (supplementaryType === "complementary" && !selectedReplacedCourseId) {
+      return;
+    }
+
+    const prefix = supplementaryType === "complementary" ? "Complementary" : "Substitute";
+
+    const nextCurriculums = saveSupplementaryCurriculum({
+      id: `supplementary-curriculum-${Date.now()}`,
       schoolId: school.id,
-      curriculumId: selectedAssignment.curriculumId,
-      termId: targetClass?.termId,
-      classId: targetClass?.classId,
-      name: courseName.trim(),
+      baseCurriculumId: selectedAssignment.curriculumId,
+      type: supplementaryType,
+      scope,
+      termId: selectedTermId,
+      classId: scope === "class" || scope === "student" ? selectedClass?.id : undefined,
+      studentId: scope === "student" ? selectedStudentId : undefined,
+      replacesCourseId: supplementaryType === "complementary" ? selectedReplacedCourseId : undefined,
+      name: curriculumName.trim() || `${prefix} - ${courseName.trim()}`,
       code: courseCode.trim(),
       description: description.trim() || undefined,
+      courses: [
+        {
+          id: `supplementary-course-${Date.now()}`,
+          name: courseName.trim(),
+          code: courseCode.trim(),
+          description: description.trim() || undefined,
+        },
+      ],
+      effectiveDate: new Date().toISOString().split("T")[0],
+      status: "Active",
       createdAt: new Date().toISOString().split("T")[0],
     });
 
-    setSupplementaryCourses(nextCourses.filter((course) => course.schoolId === school.id));
+    setSupplementaryCurriculums(nextCurriculums.filter((curriculum) => curriculum.schoolId === school.id));
+    setCurriculumName("");
     setCourseName("");
     setCourseCode("");
     setDescription("");
-    setSelectedCourseId("");
+    setSelectedReplacedCourseId("");
   };
 
   return (
@@ -229,7 +326,7 @@ export function SchoolDetailPage() {
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <p className="text-xs font-medium text-slate-500">Supplementary</p>
-                <p className="mt-1 text-xl font-semibold text-slate-950">{supplementaryCourses.length}</p>
+                <p className="mt-1 text-xl font-semibold text-slate-950">{supplementaryCount}</p>
               </div>
             </div>
           </div>
@@ -249,7 +346,8 @@ export function SchoolDetailPage() {
                   value={selectedAssignment?.curriculumId || ""}
                   onChange={(event) => {
                     setSelectedCurriculumId(event.target.value);
-                    setSelectedClassId("");
+                    setSelectedTermId("");
+                    resetTargetFields();
                     resetCourseFields();
                   }}
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 lg:w-80"
@@ -267,7 +365,7 @@ export function SchoolDetailPage() {
               <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-10 text-center">
                 <Building2 className="mx-auto mb-3 h-8 w-8 text-slate-400" />
                 <p className="font-medium text-slate-700">No active curriculum assigned</p>
-                <p className="mt-1 text-sm text-slate-500">Assign a curriculum before adding supplementary courses.</p>
+                <p className="mt-1 text-sm text-slate-500">Assign a curriculum before adding supplementary curriculums.</p>
               </div>
             ) : (
               <div className="space-y-5">
@@ -295,22 +393,30 @@ export function SchoolDetailPage() {
                   </div>
                 </div>
 
-                {schoolWideCourses.length > 0 && (
+                {schoolWideCurriculums.length > 0 && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                     <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-emerald-800">
                       <Sparkles className="h-4 w-4" />
-                      School-wide supplementary courses
+                      School-wide supplementary curriculums
                     </div>
                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                      {schoolWideCourses.map((course) => (
-                        <div key={course.id} className="rounded-lg border border-emerald-200 bg-white p-4">
+                      {schoolWideCurriculums.map((curriculum) => (
+                        <div key={curriculum.id} className="rounded-lg border border-emerald-200 bg-white p-4">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium text-slate-900">{course.name}</p>
+                            <p className="font-medium text-slate-900">{curriculum.name}</p>
                             <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-mono text-xs text-emerald-700">
-                              {course.code}
+                              {curriculum.code}
+                            </span>
+                            <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                              {formatSupplementaryType(curriculum.type)}
                             </span>
                           </div>
-                          {course.description && <p className="mt-2 text-sm text-slate-600">{course.description}</p>}
+                          {getReplacementLabel(curriculum) && (
+                            <p className="mt-2 text-xs font-medium text-amber-700">{getReplacementLabel(curriculum)}</p>
+                          )}
+                          {curriculum.description && (
+                            <p className="mt-2 text-sm text-slate-600">{curriculum.description}</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -331,8 +437,12 @@ export function SchoolDetailPage() {
 
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       {term.classes.map((cls) => {
-                        const classSupplementaryCourses = coursesForSelectedCurriculum.filter(
-                          (course) => course.classId === cls.id
+                        const classSupplementaryCurriculums = getCurriculumsForClass(term.id, cls.id);
+                        const complementaryCurriculums = classSupplementaryCurriculums.filter(
+                          (curriculum) => curriculum.type === "complementary"
+                        );
+                        const substituteCurriculums = classSupplementaryCurriculums.filter(
+                          (curriculum) => curriculum.type === "substitute"
                         );
 
                         return (
@@ -341,36 +451,88 @@ export function SchoolDetailPage() {
                               <div>
                                 <p className="font-semibold text-slate-950">{cls.name}</p>
                                 <p className="mt-1 text-sm text-slate-500">
-                                  {cls.courses.length} default, {classSupplementaryCourses.length} supplementary
+                                  {cls.courses.length} default, {classSupplementaryCurriculums.length} supplementary
                                 </p>
                               </div>
                               <GraduationCap className="h-5 w-5 text-slate-400" />
                             </div>
 
                             <div className="space-y-2">
-                              {cls.courses.map((course) => (
-                                <div key={course.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-slate-400" />
-                                    <p className="text-sm font-medium text-slate-800">{course.name}</p>
-                                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-500">
-                                      {course.code}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
+                              {cls.courses.map((course) => {
+                                const replacements = complementaryCurriculums.filter(
+                                  (curriculum) => curriculum.replacesCourseId === course.id
+                                );
+                                const isReplaced = replacements.length > 0;
 
-                              {classSupplementaryCourses.map((course) => (
-                                <div key={course.id} className="rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                                return (
+                                  <div
+                                    key={course.id}
+                                    className={`rounded-lg border px-3 py-2 ${
+                                      isReplaced ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"
+                                    }`}
+                                  >
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <CheckCircle2
+                                        className={`h-4 w-4 ${isReplaced ? "text-amber-500" : "text-slate-400"}`}
+                                      />
+                                      <p className="text-sm font-medium text-slate-800">{course.name}</p>
+                                      <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-500">
+                                        {course.code}
+                                      </span>
+                                      {isReplaced && (
+                                        <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                          Replaced
+                                        </span>
+                                      )}
+                                    </div>
+                                    {replacements.map((curriculum) => (
+                                      <div
+                                        key={curriculum.id}
+                                        className="mt-2 rounded-md border border-amber-200 bg-white px-3 py-2"
+                                      >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <Sparkles className="h-4 w-4 text-amber-600" />
+                                          <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
+                                          <span className="rounded-md bg-amber-100 px-2 py-0.5 font-mono text-xs text-amber-700">
+                                            {curriculum.code}
+                                          </span>
+                                          <span className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
+                                            {getTargetLabel(curriculum)}
+                                          </span>
+                                        </div>
+                                        {curriculum.courses.map((replacementCourse) => (
+                                          <p key={replacementCourse.id} className="mt-1 pl-6 text-sm text-slate-700">
+                                            {replacementCourse.name} ({replacementCourse.code})
+                                          </p>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
+
+                              {substituteCurriculums.map((curriculum) => (
+                                <div
+                                  key={curriculum.id}
+                                  className="rounded-lg border border-emerald-200 bg-white px-3 py-2"
+                                >
                                   <div className="flex flex-wrap items-center gap-2">
                                     <Sparkles className="h-4 w-4 text-emerald-600" />
-                                    <p className="text-sm font-medium text-slate-900">{course.name}</p>
+                                    <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
                                     <span className="rounded-md bg-emerald-100 px-2 py-0.5 font-mono text-xs text-emerald-700">
-                                      {course.code}
+                                      {curriculum.code}
+                                    </span>
+                                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                                      {getTargetLabel(curriculum)}
                                     </span>
                                   </div>
-                                  {course.description && (
-                                    <p className="mt-2 pl-6 text-sm text-slate-600">{course.description}</p>
+                                  {curriculum.courses.map((course) => (
+                                    <p key={course.id} className="mt-1 pl-6 text-sm text-slate-700">
+                                      {course.name} ({course.code})
+                                    </p>
+                                  ))}
+                                  {curriculum.description && (
+                                    <p className="mt-2 pl-6 text-sm text-slate-600">{curriculum.description}</p>
                                   )}
                                 </div>
                               ))}
@@ -393,24 +555,50 @@ export function SchoolDetailPage() {
                 <Plus className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="font-semibold text-slate-950">Supplementary Course</h2>
-                <p className="text-sm text-slate-500">Only affects this school.</p>
+                <h2 className="font-semibold text-slate-950">Supplementary Curriculum</h2>
+                <p className="text-sm text-slate-500">Default curriculum stays unchanged.</p>
               </div>
             </div>
 
             <div className="space-y-5">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Apply To</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Type</label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { value: "school", label: "School-wide" },
-                    { value: "class", label: "Specific Class" },
+                    { value: "complementary", label: "Complementary" },
+                    { value: "substitute", label: "Substitute" },
                   ].map((option) => (
                     <button
                       key={option.value}
                       onClick={() => {
-                        setScope(option.value as CourseScope);
-                        setSelectedClassId("");
+                        setSupplementaryType(option.value as SupplementaryType);
+                        setSelectedReplacedCourseId("");
+                      }}
+                      className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                        supplementaryType === option.value
+                          ? "border-[#1B50B8] bg-blue-50 text-[#1B50B8]"
+                          : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Apply To</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "school", label: "School-wide" },
+                    { value: "class", label: "Class" },
+                    { value: "student", label: "Student" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setScope(option.value as SupplementaryScope);
+                        resetTargetFields();
                         resetCourseFields();
                       }}
                       className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
@@ -425,21 +613,86 @@ export function SchoolDetailPage() {
                 </div>
               </div>
 
-              {scope === "class" && (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Term</label>
+                <select
+                  value={selectedTermId}
+                  onChange={(event) => {
+                    setSelectedTermId(event.target.value);
+                    resetTargetFields();
+                    resetCourseFields();
+                  }}
+                  disabled={!selectedAssignment}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                >
+                  <option value="">Choose a term...</option>
+                  {termOptions.map((term) => (
+                    <option key={term.id} value={term.id}>
+                      {term.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(scope === "class" || scope === "student") && (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Class</label>
                   <select
                     value={selectedClassId}
                     onChange={(event) => {
                       setSelectedClassId(event.target.value);
+                      setSelectedStudentId("");
                       resetCourseFields();
                     }}
+                    disabled={!selectedTermId}
                     className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Choose a class...</option>
-                    {classOptions.map((option) => (
-                      <option key={`${option.termId}-${option.classId}`} value={option.classId}>
-                        {option.className} - {option.termName}
+                    <option value="">{selectedTermId ? "Choose a class..." : "Choose a term first..."}</option>
+                    {classesForSelectedTerm.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {scope === "student" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Student</label>
+                  <select
+                    value={selectedStudentId}
+                    onChange={(event) => setSelectedStudentId(event.target.value)}
+                    disabled={!selectedClassId}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">{selectedClassId ? "Choose a student..." : "Choose a class first..."}</option>
+                    {studentsForSelectedClass.map((student) => (
+                      <option key={student.id} value={student.id}>
+                        {student.name}
+                        {student.admissionNumber ? ` (${student.admissionNumber})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {supplementaryType === "complementary" && (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Replace Course</label>
+                  <select
+                    value={selectedReplacedCourseId}
+                    onChange={(event) => setSelectedReplacedCourseId(event.target.value)}
+                    disabled={
+                      !selectedTermId ||
+                      ((scope === "class" || scope === "student") && !selectedClassId)
+                    }
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                  >
+                    <option value="">Choose a default course...</option>
+                    {replacementCourseOptions.map((course) => (
+                      <option key={`${course.termId}-${course.classId}-${course.id}`} value={course.id}>
+                        {course.name} ({course.code}) - {course.className}
                       </option>
                     ))}
                   </select>
@@ -447,22 +700,14 @@ export function SchoolDetailPage() {
               )}
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Choose Course</label>
-                <select
-                  value={selectedCourseId}
-                  onChange={(event) => handleCourseSelect(event.target.value)}
-                  disabled={!selectedAssignment || (scope === "class" && !selectedClassId)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                >
-                  <option value="">
-                    {scope === "class" && !selectedClassId ? "Choose a class first..." : "Choose a course..."}
-                  </option>
-                  {availableCourseOptions.map((course) => (
-                    <option key={`${course.termId}-${course.classId}-${course.id}`} value={course.id}>
-                      {course.name} ({course.code}) - {course.className}, {course.termName}
-                    </option>
-                  ))}
-                </select>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Curriculum Name</label>
+                <input
+                  type="text"
+                  value={curriculumName}
+                  onChange={(event) => setCurriculumName(event.target.value)}
+                  placeholder="e.g., Term 1 Robotics Track"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
@@ -499,17 +744,20 @@ export function SchoolDetailPage() {
               </div>
 
               <button
-                onClick={handleAddSupplementaryCourse}
+                onClick={handleAddSupplementaryCurriculum}
                 disabled={
                   !selectedAssignment ||
+                  !selectedTermId ||
                   !courseName.trim() ||
                   !courseCode.trim() ||
-                  (scope === "class" && !selectedClassId)
+                  ((scope === "class" || scope === "student") && !selectedClassId) ||
+                  (scope === "student" && !selectedStudentId) ||
+                  (supplementaryType === "complementary" && !selectedReplacedCourseId)
                 }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus className="h-4 w-4" />
-                Add Supplementary Course
+                Add Supplementary Curriculum
               </button>
             </div>
           </section>
