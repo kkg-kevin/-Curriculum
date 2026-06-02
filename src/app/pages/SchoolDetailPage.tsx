@@ -507,15 +507,28 @@ export function SchoolDetailPage() {
                             <div className="space-y-2">
                               {
                                 (() => {
-                                  // Build substitution map for class-level substitutes
-                                  const substitutes = classSupplementaryCurriculums.filter((c) => c.type === "substitute" && c.scope === "class");
-                                  const complements = classSupplementaryCurriculums.filter((c) => c.type === "complementary");
-                                  const replacements: Record<string, { id: string; name: string; code: string; description?: string }> = {};
-                                  substitutes.forEach((s) => {
+                                  // Separate class-level and student-level supplementary curricula
+                                  const classLevelSubs = classSupplementaryCurriculums.filter((c) => c.scope === "class");
+                                  const studentLevelSupps = classSupplementaryCurriculums.filter((c) => c.scope === "student");
+
+                                  const classSubstitutes = classLevelSubs.filter((c) => c.type === "substitute");
+                                  const classComplements = classLevelSubs.filter((c) => c.type === "complementary");
+
+                                  const replacements: Record<string, any> = {};
+                                  classSubstitutes.forEach((s) => {
                                     const replacedId = (s as any).replacesCourseId;
                                     if (replacedId && s.courses && s.courses[0]) {
-                                      replacements[replacedId] = s.courses[0] as any;
+                                      replacements[replacedId] = s.courses[0];
                                     }
+                                  });
+
+                                  // Group student-level supplements by studentId
+                                  const studentGroups = new Map<string, SupplementaryCurriculum[]>();
+                                  studentLevelSupps.forEach((s) => {
+                                    if (!s.studentId) return;
+                                    const arr = studentGroups.get(s.studentId) || [];
+                                    arr.push(s);
+                                    studentGroups.set(s.studentId, arr);
                                   });
 
                                   return (
@@ -532,7 +545,7 @@ export function SchoolDetailPage() {
                                                   {replacement.code}
                                                 </span>
                                                 <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                                                  Substitute
+                                                  Substitute (class)
                                                 </span>
                                               </div>
                                             </div>
@@ -552,44 +565,49 @@ export function SchoolDetailPage() {
                                         );
                                       })}
 
-                                      {complements.map((curriculum) => (
-                                        <div
-                                          key={curriculum.id}
-                                          className={`rounded-lg border bg-white px-3 py-2 ${
-                                            curriculum.type === "complementary" ? "border-blue-200" : "border-emerald-200"
-                                          }`}
-                                        >
+                                      {classComplements.map((curriculum) => (
+                                        <div key={curriculum.id} className="rounded-lg border bg-white px-3 py-2 border-blue-200">
                                           <div className="flex flex-wrap items-center gap-2">
-                                            <Sparkles
-                                              className={`h-4 w-4 ${
-                                                curriculum.type === "complementary" ? "text-blue-600" : "text-emerald-600"
-                                              }`}
-                                            />
+                                            <Sparkles className="h-4 w-4 text-blue-600" />
                                             <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
-                                            <span
-                                              className={`rounded-md px-2 py-0.5 font-mono text-xs ${
-                                                curriculum.type === "complementary" ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
-                                              }`}
-                                            >
-                                              {curriculum.code}
-                                            </span>
-                                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                                              {formatSupplementaryType(curriculum.type)}
-                                            </span>
-                                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                                              {getTargetLabel(curriculum)}
-                                            </span>
+                                            <span className="rounded-md px-2 py-0.5 font-mono text-xs bg-blue-100 text-blue-700">{curriculum.code}</span>
+                                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{getTargetLabel(curriculum)}</span>
                                           </div>
                                           {curriculum.courses.map((course) => (
-                                            <p key={course.id} className="mt-1 pl-6 text-sm text-slate-700">
-                                              {course.name} ({course.code})
-                                            </p>
+                                            <p key={course.id} className="mt-1 pl-6 text-sm text-slate-700">{course.name} ({course.code})</p>
                                           ))}
-                                          {curriculum.description && (
-                                            <p className="mt-2 pl-6 text-sm text-slate-600">{curriculum.description}</p>
-                                          )}
                                         </div>
                                       ))}
+
+                                      {Array.from(studentGroups.entries()).map(([studentId, currs]) => {
+                                        const student = students.find((s) => s.id === studentId);
+                                        return (
+                                          <div key={`stu-${studentId}`} className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                                            <div className="mb-2 flex items-center justify-between">
+                                              <p className="text-sm font-semibold text-slate-900">Student: {student ? student.name : studentId}</p>
+                                              <p className="text-xs text-slate-500">{currs.length} supplementary</p>
+                                            </div>
+                                            <div className="space-y-2">
+                                              {currs.map((curriculum) => (
+                                                <div key={curriculum.id} className={`rounded-md border px-3 py-2 ${curriculum.type === "complementary" ? "border-blue-200" : "border-emerald-200"}`}>
+                                                  <div className="flex items-center gap-2">
+                                                    <Sparkles className={`h-4 w-4 ${curriculum.type === "complementary" ? "text-blue-600" : "text-emerald-600"}`} />
+                                                    <p className="text-sm font-medium text-slate-900">{curriculum.name}</p>
+                                                    <span className="rounded-md px-2 py-0.5 font-mono text-xs bg-slate-100 text-slate-700">{curriculum.code}</span>
+                                                    <span className="ml-auto text-xs text-slate-500">{formatSupplementaryType(curriculum.type)}</span>
+                                                  </div>
+                                                  {curriculum.type === "substitute" && curriculum.replacesCourseId && (
+                                                    <p className="mt-1 pl-6 text-sm text-slate-700">Replaces: {cls.courses.find((c) => c.id === curriculum.replacesCourseId)?.name || curriculum.replacesCourseId}</p>
+                                                  )}
+                                                  {curriculum.courses.map((course) => (
+                                                    <p key={course.id} className="mt-1 pl-6 text-sm text-slate-700">{course.name} ({course.code})</p>
+                                                  ))}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </>
                                   );
                                 })()
@@ -840,7 +858,7 @@ export function SchoolDetailPage() {
                 </div>
               )}
 
-              {supplementaryType === "substitute" && scope === "class" && selectedClass && (
+              {supplementaryType === "substitute" && (scope === "class" || scope === "student") && selectedClass && (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Replace default course</label>
                   <select
