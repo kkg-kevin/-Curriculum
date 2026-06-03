@@ -19,6 +19,14 @@ import {
 } from "lucide-react";
 import { getCurriculums, type Curriculum } from "../lib/curriculumStorage";
 import { getAssignments, getSchools, getStudents } from "../lib/schoolStorage";
+import {
+  defaultCurriculumManagementStats,
+  defaultLearnerJourney,
+  mockApprovals,
+  mockDeployments,
+  type CurriculumManagementStat,
+  type LearnerJourneyItem,
+} from "../data/mockData";
 
 function countCourses(curriculum: Curriculum) {
   return curriculum.structure.reduce(
@@ -30,6 +38,22 @@ function countCourses(curriculum: Curriculum) {
 function countClasses(curriculum: Curriculum) {
   return curriculum.structure.reduce((total, term) => total + term.classes.length, 0);
 }
+
+const statIcons = {
+  book: BookOpen,
+  building: Building2,
+  puzzle: Puzzle,
+  users: Users,
+  chart: LineChart,
+};
+
+const journeyIcons = {
+  book: BookOpen,
+  puzzle: Puzzle,
+  users: Users,
+  chart: LineChart,
+  trophy: Trophy,
+};
 
 export function CurriculumListPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,54 +72,22 @@ export function CurriculumListPage() {
   });
 
   const stats = useMemo(
-    () => [
-      {
-        title: "Curriculum Versions",
-        value: publishedCurriculums.length || curriculums.length,
-        detail: "Published",
-        action: "View all",
-        icon: BookOpen,
-        color: "text-blue-600",
-        bg: "bg-blue-50",
-      },
-      {
-        title: "Schools Deployed",
-        value: Math.max(activeAssignments.length, schools.length * 4 + curriculums.length * 12),
-        detail: "Across all curricula",
-        action: "View all",
-        icon: Building2,
-        color: "text-blue-600",
-        bg: "bg-blue-50",
-      },
-      {
-        title: "Active Supplements",
-        value: 45,
-        detail: "Across 32 schools",
-        action: "View all",
-        icon: Puzzle,
-        color: "text-purple-600",
-        bg: "bg-purple-50",
-      },
-      {
-        title: "Learners on Journey",
-        value: Math.max(128540, students.length),
-        detail: "+8.4% this term",
-        action: "View reports",
-        icon: Users,
-        color: "text-blue-600",
-        bg: "bg-blue-50",
-      },
-      {
-        title: "Completion Rate",
-        value: "72%",
-        detail: "Across all schools",
-        action: "View analytics",
-        icon: LineChart,
-        color: "text-blue-600",
-        bg: "bg-blue-50",
-        progress: 72,
-      },
-    ],
+    () =>
+      defaultCurriculumManagementStats.map((stat) => {
+        if (stat.title === "Curriculum Versions") {
+          return { ...stat, value: Math.max(Number(stat.value), publishedCurriculums.length || curriculums.length) };
+        }
+
+        if (stat.title === "Schools Deployed") {
+          return { ...stat, value: Math.max(Number(stat.value), activeAssignments.length, schools.length) };
+        }
+
+        if (stat.title === "Learners on Journey") {
+          return { ...stat, value: Math.max(Number(stat.value), students.length) };
+        }
+
+        return stat;
+      }),
     [activeAssignments.length, curriculums.length, publishedCurriculums.length, schools.length, students.length]
   );
 
@@ -187,7 +179,7 @@ function StatCard({
   value,
   detail,
   action,
-  icon: Icon,
+  icon,
   color,
   bg,
   progress,
@@ -196,11 +188,13 @@ function StatCard({
   value: number | string;
   detail: string;
   action: string;
-  icon: typeof BookOpen;
+  icon: CurriculumManagementStat["icon"];
   color: string;
   bg: string;
   progress?: number;
 }) {
+  const Icon = statIcons[icon];
+
   return (
     <article className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start gap-3">
@@ -308,12 +302,7 @@ function RecentDeployments({
   schools: ReturnType<typeof getSchools>;
   assignments: ReturnType<typeof getAssignments>;
 }) {
-  const rows = [
-    { school: "Greenfield Academy", location: "Nairobi", curriculum: "CBC Junior Secondary v1.1", dates: "Jan 15, 2024 - Dec 20, 2024", status: "Active", supplements: 2, action: "Manage" },
-    { school: "Starlight International", location: "Mombasa", curriculum: "British Lower Secondary v2.0", dates: "Nov 1, 2023 - Oct 31, 2024", status: "Active", supplements: 1, action: "Manage" },
-    { school: "Riverside School", location: "Kisumu", curriculum: "CBC Junior Secondary v1.1", dates: "Jan 10, 2024 - Dec 15, 2024", status: "Draft", supplements: 0, action: "Continue" },
-    { school: "Bright Future Academy", location: "Eldoret", curriculum: "IGCSE 9-1 v1.0", dates: "Feb 1, 2024 - Jan 31, 2025", status: "Pending", supplements: 1, action: "Review" },
-  ];
+  const rows = [...mockDeployments];
 
   assignments.slice(0, 2).forEach((assignment, index) => {
     const school = schools.find((item) => item.id === assignment.schoolId);
@@ -443,11 +432,7 @@ function DeploymentOverview({ activeCount }: { activeCount: number }) {
 }
 
 function PendingApprovals() {
-  const approvals = [
-    { title: "Supplement Request", school: "Greenfield Academy", detail: "Robotics Enrichment Term 2", tag: "Additive", color: "teal" },
-    { title: "Override Request", school: "Riverside School", detail: "Compressed Term 2 Schedule", tag: "Pacing", color: "amber" },
-    { title: "Supplement Request", school: "Starlight International", detail: "Replace Art with Digital Design", tag: "Substitutive", color: "purple" },
-  ];
+  const approvals = mockApprovals;
 
   return (
     <section className="rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
@@ -482,13 +467,9 @@ function PendingApprovals() {
 }
 
 function LearnerJourney({ curriculum }: { curriculum?: Curriculum }) {
-  const items = [
-    { title: "Base Curriculum", detail: `${curriculum?.name || "CBC Junior Secondary"} v${curriculum?.version || "1.1"}`, meta: "3 Terms • 8 Courses", icon: BookOpen },
-    { title: "Supplements", detail: "2 Active Supplements", meta: "Added to this school", icon: Puzzle },
-    { title: "Active Learners", detail: "1,245 Learners", meta: "In 45 Classes", icon: Users },
-    { title: "Progress", detail: "72% Avg. Completion", meta: "On track", icon: LineChart },
-    { title: "Outcomes", detail: "85% Mastery Rate", meta: "This Term", icon: Trophy },
-  ];
+  const items = defaultLearnerJourney.map((item, index) =>
+    index === 0 && curriculum ? { ...item, detail: `${curriculum.name} v${curriculum.version}` } : item
+  );
 
   return (
     <section className="mt-6 rounded-lg border border-slate-100 bg-white p-5 shadow-sm">
@@ -509,14 +490,16 @@ function FragmentJourney({
   item,
   showArrow,
 }: {
-  item: { title: string; detail: string; meta: string; icon: typeof BookOpen };
+  item: LearnerJourneyItem;
   showArrow: boolean;
 }) {
+  const Icon = journeyIcons[item.icon];
+
   return (
     <>
       <div className="flex items-center gap-4 rounded-lg bg-blue-50 p-4">
         <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-white text-blue-600">
-          <item.icon className="h-7 w-7" />
+          <Icon className="h-7 w-7" />
         </div>
         <div>
           <p className="font-semibold text-slate-900">{item.title}</p>

@@ -26,6 +26,7 @@ import {
   Workflow,
   X,
 } from "lucide-react";
+import { defaultSettings, getMockSettings, saveMockSettings } from "../data/mockData";
 
 type Permission = "create" | "edit" | "publish" | "approve";
 
@@ -41,17 +42,8 @@ const rolePermissions: Array<{
 ];
 
 export function CurriculumSettingsPage() {
-  const [settings, setSettings] = useState({
-    competencies: true,
-    autoArchive: true,
-    outcomeMapping: true,
-    courseReuse: true,
-    supplements: true,
-    supplementApproval: true,
-    auditLogging: true,
-    exportOptions: true,
-    complianceMode: true,
-  });
+  const [settings, setSettings] = useState(() => getMockSettings());
+  const [saveMessage, setSaveMessage] = useState("");
 
   const toggle = (key: keyof typeof settings) => {
     setSettings((current) => ({ ...current, [key]: !current[key] }));
@@ -102,14 +94,29 @@ export function CurriculumSettingsPage() {
 
           <div className="flex flex-wrap justify-end gap-3">
             <button className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-7 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
+            <button
+              onClick={() => {
+                saveMockSettings(settings);
+                setSaveMessage("Settings saved");
+              }}
+              className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-7 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
               <Check className="h-4 w-4" />
               Save Changes
             </button>
-            <button className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-7 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+            <button
+              onClick={() => {
+                setSettings(defaultSettings);
+                saveMockSettings(defaultSettings);
+                setSaveMessage("Settings reset");
+              }}
+              className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-7 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
               <RotateCcw className="h-4 w-4" />
               Reset
             </button>
           </div>
+          {saveMessage && <p className="mt-3 text-right text-sm font-semibold text-emerald-600">{saveMessage}</p>}
         </header>
 
         <nav className="mb-5 flex overflow-x-auto rounded-lg border border-slate-200 bg-white">
