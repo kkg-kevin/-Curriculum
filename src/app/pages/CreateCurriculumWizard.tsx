@@ -360,9 +360,11 @@ export function CreateCurriculumWizard() {
     setCourses(courses.map((course) => (course.id === id ? { ...course, description } : course)));
   };
 
-  const handleSave = () => {
-    saveCurriculum({
-      id: existingCurriculum?.id || `curriculum-${Date.now()}`,
+  const buildCurriculumDraft = () => {
+    const curriculumId = existingCurriculum?.id || `curriculum-${Date.now()}`;
+
+    return {
+      id: curriculumId,
       name: basicInfo.name.trim() || "Untitled Curriculum",
       code: basicInfo.code.trim() || "NO-CODE",
       version: basicInfo.version.trim() || "1.0",
@@ -400,8 +402,18 @@ export function CreateCurriculumWizard() {
               })),
           })),
       })),
-    });
+    };
+  };
+
+  const handleSave = () => {
+    saveCurriculum(buildCurriculumDraft());
     navigate("/curriculums");
+  };
+
+  const handleOpenStructure = () => {
+    const curriculumDraft = buildCurriculumDraft();
+    saveCurriculum(curriculumDraft);
+    navigate(`/curriculums/${curriculumDraft.id}`);
   };
 
   if (id && !existingCurriculum) {
@@ -483,7 +495,7 @@ export function CreateCurriculumWizard() {
                 Save as Draft
               </button>
               <button
-                onClick={() => (currentStep < 6 ? setCurrentStep((currentStep + 1) as Step) : handleSave())}
+                onClick={() => (currentStep === 1 ? handleOpenStructure() : currentStep < 6 ? setCurrentStep((currentStep + 1) as Step) : handleSave())}
                 className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-7 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 {currentStep < 6 ? "Next: Add Structure" : isEditing ? "Save Changes" : "Save Curriculum"}

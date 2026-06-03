@@ -23,6 +23,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Send,
   Settings,
   ShieldCheck,
   Workflow,
@@ -68,9 +69,11 @@ export function CurriculumDetailPage() {
 
   const addTerm = (name: string) => {
     if (!curriculum) return;
+    const trimmedName = name.trim();
+    if (trimmedName && curriculum.structure.some((term) => term.name.toLowerCase() === trimmedName.toLowerCase())) return;
     const nextTerm = {
       id: `term-${Date.now()}`,
-      name: name.trim() || `Term ${curriculum.structure.length + 1}`,
+      name: trimmedName || `Term ${curriculum.structure.length + 1}`,
       classes: [],
     };
     persistCurriculum({ ...curriculum, structure: [...curriculum.structure, nextTerm] });
@@ -79,6 +82,11 @@ export function CurriculumDetailPage() {
 
   const addClassToTerm = (termId: string, name: string) => {
     if (!curriculum) return;
+    const targetTerm = curriculum.structure.find((term) => term.id === termId);
+    const trimmedName = name.trim();
+    if (!targetTerm) return;
+    if (trimmedName && targetTerm.classes.some((cls) => cls.name.toLowerCase() === trimmedName.toLowerCase())) return;
+
     const nextCurriculum = {
       ...curriculum,
       structure: curriculum.structure.map((term) =>
@@ -89,7 +97,7 @@ export function CurriculumDetailPage() {
                 ...term.classes,
                 {
                   id: `class-${Date.now()}`,
-                  name: name.trim() || `Class ${term.classes.length + 1}`,
+                  name: trimmedName || `Class ${term.classes.length + 1}`,
                   courses: [],
                 },
               ],
@@ -100,11 +108,18 @@ export function CurriculumDetailPage() {
     persistCurriculum(nextCurriculum);
   };
 
+  const addDefaultGradesToTerm = (termId: string) => {
+    ["Grade 7", "Grade 8", "Grade 9"].forEach((grade) => addClassToTerm(termId, grade));
+  };
+
   const addCourseToClass = (termId: string, classId: string, course: { name: string; code: string; description: string }) => {
     if (!curriculum) return;
     const trimmedName = course.name.trim();
     const trimmedCode = course.code.trim();
     if (!trimmedName || !trimmedCode) return;
+    const targetClass = curriculum.structure.find((term) => term.id === termId)?.classes.find((cls) => cls.id === classId);
+    if (!targetClass) return;
+    if (targetClass.courses.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase() || item.code.toLowerCase() === trimmedCode.toLowerCase())) return;
 
     const nextCurriculum = {
       ...curriculum,
@@ -167,6 +182,7 @@ export function CurriculumDetailPage() {
   }
 
   const selectedTerm = curriculum.structure.find((term) => term.id === selectedTermId) ?? curriculum.structure[0];
+  const structureValid = totals.terms > 0 && totals.classes > 0 && totals.courses > 0;
   const termBreakdown = curriculum.structure.map((term, index) => ({
     label: term.name || `Term ${index + 1}`,
     value: countCourses(term),
@@ -326,22 +342,26 @@ export function CurriculumDetailPage() {
             />
 
             <main className="rounded-lg border border-slate-200 bg-white">
-              {selectedTerm && <TermPanel term={selectedTerm} onAddClass={addClassToTerm} onAddCourse={addCourseToClass} />}
+              {selectedTerm && (
+                <TermPanel
+                  term={selectedTerm}
+                  onAddClass={addClassToTerm}
+                  onAddDefaultGrades={addDefaultGradesToTerm}
+                  onAddCourse={addCourseToClass}
+                />
+              )}
             </main>
 
             <aside className="space-y-5">
               <StructureOverview totalCourses={totals.courses} terms={termBreakdown} />
               <QuickActions
+                curriculumId={curriculum.id}
                 onAddTerm={() => addTerm("")}
                 onAddClass={() => selectedTerm && addClassToTerm(selectedTerm.id, "")}
-                onAddCourse={() => {
-                  const firstClass = selectedTerm?.classes[0];
-                  if (selectedTerm && firstClass) {
-                    addCourseToClass(selectedTerm.id, firstClass.id, { name: "New Course", code: "NEW", description: "" });
-                  }
-                }}
+                onAddDefaultGrades={() => selectedTerm && addDefaultGradesToTerm(selectedTerm.id)}
+                canAssign={structureValid}
               />
-              <ValidCard />
+              <ValidCard curriculumId={curriculum.id} isValid={structureValid} />
             </aside>
           </div>
         )}
@@ -433,10 +453,12 @@ function StructureTree({
 function TermPanel({
   term,
   onAddClass,
+  onAddDefaultGrades,
   onAddCourse,
 }: {
   term: CurriculumTerm;
   onAddClass: (termId: string, name: string) => void;
+  onAddDefaultGrades: (termId: string) => void;
   onAddCourse: (termId: string, classId: string, course: { name: string; code: string; description: string }) => void;
 }) {
   const courses = countCourses(term);
@@ -465,10 +487,10 @@ function TermPanel({
               Edit
             </button>
             <button
-              onClick={() => onAddClass(term.id, "")}
+              onClick={() => onAddDefaultGrades(term.id)}
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-blue-600 hover:bg-slate-50"
             >
-              Add Class
+              Add Grades 7-9
             </button>
             <button className="grid h-10 w-10 place-items-center rounded-lg border border-slate-300 text-blue-600 hover:bg-slate-50">
               <MoreVertical className="h-4 w-4" />
@@ -497,17 +519,9 @@ function TermPanel({
           </div>
           <div className="flex items-center gap-4">
             <button className="text-sm font-semibold text-blue-600">Expand All</button>
-            <button
-              onClick={() => {
-                const firstClass = term.classes[0];
-                if (firstClass) onAddCourse(term.id, firstClass.id, { name: "New Course", code: "NEW", description: "" });
-              }}
-              disabled={term.classes.length === 0}
-              className="inline-flex h-10 items-center gap-2 rounded-lg border border-blue-500 px-4 text-sm font-semibold text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus className="h-4 w-4" />
-              Add Course
-            </button>
+            <span className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+              Add courses inside each class
+            </span>
           </div>
         </div>
 
@@ -714,18 +728,22 @@ function StructureOverview({ totalCourses, terms }: { totalCourses: number; term
 }
 
 function QuickActions({
+  curriculumId,
   onAddTerm,
   onAddClass,
-  onAddCourse,
+  onAddDefaultGrades,
+  canAssign,
 }: {
+  curriculumId: string;
   onAddTerm: () => void;
   onAddClass: () => void;
-  onAddCourse: () => void;
+  onAddDefaultGrades: () => void;
+  canAssign: boolean;
 }) {
   const actions = [
     { title: "Add Term / Semester", description: "Define academic periods", icon: CalendarDays, onClick: onAddTerm },
-    { title: "Add Class / Grade", description: "Create or import classes", icon: GraduationCap, onClick: onAddClass },
-    { title: "Add Course", description: "Attach subjects to first class", icon: BookOpen, onClick: onAddCourse },
+    { title: "Add Class / Grade", description: "Create one class in selected term", icon: GraduationCap, onClick: onAddClass },
+    { title: "Add Grades 7-9", description: "Create the standard grade set", icon: BookOpen, onClick: onAddDefaultGrades },
     { title: "Reorder Structure", description: "Drag and drop to organize", icon: ListTodo, onClick: undefined },
   ];
 
@@ -739,7 +757,7 @@ function QuickActions({
             key={action.title}
             onClick={action.onClick}
             disabled={!action.onClick}
-            className="flex items-center gap-4 rounded-lg bg-slate-50 p-4 hover:bg-blue-50"
+            className="flex w-full items-center gap-4 rounded-lg bg-slate-50 p-4 text-left hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-cyan-50 text-teal-600">
               <action.icon className="h-6 w-6" />
@@ -751,22 +769,40 @@ function QuickActions({
           </button>
         ))}
       </div>
+      <Link
+        to={`/curriculums/${curriculumId}/assign`}
+        className={`mt-4 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold ${
+          canAssign
+            ? "bg-blue-600 text-white hover:bg-blue-700"
+            : "pointer-events-none bg-slate-100 text-slate-400"
+        }`}
+      >
+        <Send className="h-4 w-4" />
+        Assign Curriculum to Schools
+      </Link>
     </section>
   );
 }
 
-function ValidCard() {
+function ValidCard({ curriculumId, isValid }: { curriculumId: string; isValid: boolean }) {
   return (
-    <section className="rounded-lg border border-emerald-100 bg-emerald-50 p-5">
+    <section className={`rounded-lg border p-5 ${isValid ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
       <div className="flex gap-4">
-        <ShieldCheck className="h-9 w-9 shrink-0 text-emerald-600" />
+        <ShieldCheck className={`h-9 w-9 shrink-0 ${isValid ? "text-emerald-600" : "text-amber-600"}`} />
         <div>
-          <h2 className="font-semibold text-slate-900">Structure is valid</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">All required components are in place.</p>
-          <button className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-            Learn more
+          <h2 className="font-semibold text-slate-900">{isValid ? "Structure is valid" : "Structure needs courses"}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {isValid
+              ? "All required components are in place. This curriculum can now be assigned to schools."
+              : "Add at least one term, class, and course before assigning this curriculum."}
+          </p>
+          <Link
+            to={`/curriculums/${curriculumId}/assign`}
+            className={`mt-3 inline-flex items-center gap-2 text-sm font-semibold ${isValid ? "text-blue-600" : "pointer-events-none text-slate-400"}`}
+          >
+            Continue to assignment
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Link>
         </div>
       </div>
     </section>
