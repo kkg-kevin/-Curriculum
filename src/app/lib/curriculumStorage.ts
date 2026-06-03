@@ -31,6 +31,11 @@ export interface Curriculum {
   schools: number;
   createdAt: string;
   description: string;
+  framework?: string;
+  educationLevel?: string;
+  academicCycleModel?: string;
+  countries?: string[];
+  tags?: string[];
   year?: string;
   startDate?: string;
   endDate?: string;

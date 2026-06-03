@@ -6,6 +6,7 @@ import { CreateCurriculumWizard } from "./pages/CreateCurriculumWizard";
 import { CurriculumDetailPage } from "./pages/CurriculumDetailPage";
 import { AssignCurriculumPage } from "./pages/AssignCurriculumPage";
 import { AssignmentsPage } from "./pages/AssignmentsPage";
+import { CurriculumSettingsPage } from "./pages/CurriculumSettingsPage";
 import { SchoolDetailPage } from "./pages/SchoolDetailPage";
 import { SchoolsPage } from "./pages/SchoolsPage";
 
@@ -24,7 +25,7 @@ export const router = createBrowserRouter([
       { path: "schools/:id", Component: SchoolDetailPage },
       { path: "assignments", Component: AssignmentsPage },
       { path: "assignments/create", Component: AssignCurriculumPage },
-      { path: "settings", Component: () => <div className="p-8 text-slate-600">Settings page coming soon</div> },
+      { path: "settings", Component: CurriculumSettingsPage },
     ],
   },
 ]);

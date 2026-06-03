@@ -67,7 +67,7 @@ export function SchoolDetailPage() {
   const [supplementaryCurriculums, setSupplementaryCurriculums] = useState(() =>
     id ? getSupplementaryCurriculumsForSchool(id) : []
   );
-  const [students] = useState(() => (id ? getStudentsForSchool(id) : []));
+  const [students, setStudents] = useState(() => (id ? getStudentsForSchool(id) : []));
   const [supplementaryType, setSupplementaryType] = useState<SupplementaryType>("substitute");
   const [scope, setScope] = useState<SupplementaryScope>("class");
   const [selectedTermId, setSelectedTermId] = useState("");
@@ -756,23 +756,38 @@ export function SchoolDetailPage() {
                 </div>
               )}
 
-              {scope === "student" && (
+                {scope === "student" && (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Student</label>
-                  <select
-                    value={selectedStudentId}
-                    onChange={(event) => setSelectedStudentId(event.target.value)}
-                    disabled={!selectedClassId}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
-                  >
-                    <option value="">{selectedClassId ? "Choose a student..." : "Choose a class first..."}</option>
-                    {studentsForSelectedClass.map((student) => (
-                      <option key={student.id} value={student.id}>
-                        {student.name}
-                        {student.admissionNumber ? ` (${student.admissionNumber})` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-start gap-2">
+                    <select
+                      value={selectedStudentId}
+                      onChange={(event) => setSelectedStudentId(event.target.value)}
+                      disabled={!selectedClassId}
+                      aria-label="Student select"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                    >
+                      <option value="">{selectedClassId ? "Choose a student..." : "Choose a class first..."}</option>
+                      {studentsForSelectedClass.map((student) => (
+                        <option key={student.id} value={student.id}>
+                          {student.name}
+                          {student.admissionNumber ? ` (${student.admissionNumber})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // seed default students and refresh local state
+                        seedDefaultStudents();
+                        setStudents(getStudentsForSchool(id!));
+                      }}
+                      className="mt-1 inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                      aria-label="Seed students"
+                    >
+                      Seed
+                    </button>
+                  </div>
                 </div>
               )}
 

@@ -171,6 +171,70 @@ const defaultStudents: Student[] = [
     status: "Active",
   },
   {
+    id: "stu-s1-4",
+    schoolId: "s1",
+    classId: "c1",
+    name: "Chloe Mwangi",
+    admissionNumber: "GA-004",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-5",
+    schoolId: "s1",
+    classId: "c1",
+    name: "Daniel Kirui",
+    admissionNumber: "GA-005",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-6",
+    schoolId: "s1",
+    classId: "c2",
+    name: "Esther Kamau",
+    admissionNumber: "GA-006",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-7",
+    schoolId: "s1",
+    classId: "c4",
+    name: "Fidelis Ouma",
+    admissionNumber: "GA-007",
+    status: "Active",
+  },
+  {
+    id: "stu-s1-8",
+    schoolId: "s1",
+    classId: "c4",
+    name: "Grace Odhiambo",
+    admissionNumber: "GA-008",
+    status: "Active",
+  },
+  {
+    id: "stu-s2-1",
+    schoolId: "s2",
+    classId: "c1",
+    name: "James Mworia",
+    admissionNumber: "RIS-001",
+    status: "Active",
+  },
+  {
+    id: "stu-s2-2",
+    schoolId: "s2",
+    classId: "c2",
+    name: "Khadija Omar",
+    admissionNumber: "RIS-002",
+    status: "Active",
+  },
+  {
+    id: "stu-s2-3",
+    schoolId: "s2",
+    classId: "c1",
+    name: "Liam Otieno",
+    admissionNumber: "RIS-003",
+    status: "Active",
+  },
+  {
     id: "stu-s3-1",
     schoolId: "s3",
     classId: "c1",
@@ -184,6 +248,54 @@ const defaultStudents: Student[] = [
     classId: "c2",
     name: "David Mwangi",
     admissionNumber: "SHS-002",
+    status: "Active",
+  },
+  {
+    id: "stu-s3-3",
+    schoolId: "s3",
+    classId: "c1",
+    name: "Hassan Ali",
+    admissionNumber: "SHS-003",
+    status: "Active",
+  },
+  {
+    id: "stu-s3-4",
+    schoolId: "s3",
+    classId: "c2",
+    name: "Irene Njeri",
+    admissionNumber: "SHS-004",
+    status: "Active",
+  },
+  {
+    id: "stu-s4-1",
+    schoolId: "s4",
+    classId: "c1",
+    name: "Martha Kambo",
+    admissionNumber: "VV-001",
+    status: "Active",
+  },
+  {
+    id: "stu-s4-2",
+    schoolId: "s4",
+    classId: "c2",
+    name: "Noah Wanyoike",
+    admissionNumber: "VV-002",
+    status: "Active",
+  },
+  {
+    id: "stu-s5-1",
+    schoolId: "s5",
+    classId: "c1",
+    name: "Olivia Ndegwa",
+    admissionNumber: "LW-001",
+    status: "Active",
+  },
+  {
+    id: "stu-s5-2",
+    schoolId: "s5",
+    classId: "c2",
+    name: "Peter Kiplagat",
+    admissionNumber: "LW-002",
     status: "Active",
   },
 ];
@@ -227,11 +339,27 @@ export function getAssignmentsForSchool(schoolId: string) {
 }
 
 export function getStudents() {
-  return readFromStorage<Student[]>(STUDENTS_STORAGE_KEY, defaultStudents);
+  const students = readFromStorage<Student[]>(STUDENTS_STORAGE_KEY, defaultStudents);
+  if (Array.isArray(students) && students.length === 0) {
+    if (canUseStorage()) {
+      window.localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(defaultStudents));
+    }
+    return defaultStudents;
+  }
+
+  return students;
 }
 
 export function getStudentsForSchool(schoolId: string) {
   return getStudents().filter((student) => student.schoolId === schoolId && student.status === "Active");
+}
+
+export function seedDefaultStudents() {
+  if (canUseStorage()) {
+    window.localStorage.setItem(STUDENTS_STORAGE_KEY, JSON.stringify(defaultStudents));
+  }
+
+  return defaultStudents;
 }
 
 function migrateSupplementaryCourses(): SupplementaryCurriculum[] {
