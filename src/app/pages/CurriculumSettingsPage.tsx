@@ -93,7 +93,6 @@ export function CurriculumSettingsPage() {
           </div>
 
           <div className="flex flex-wrap justify-end gap-3">
-            <button className="inline-flex h-11 items-center gap-2 rounded-lg bg-blue-600 px-7 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
             <button
               onClick={() => {
                 saveMockSettings(settings);

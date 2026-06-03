@@ -23,11 +23,12 @@ import {
   Plus,
   RotateCcw,
   Search,
+  Send,
   Settings,
   ShieldCheck,
   Workflow,
 } from "lucide-react";
-import { getCurriculumById, type CurriculumTerm } from "../lib/curriculumStorage";
+import { getCurriculumById, saveCurriculum, type Curriculum, type CurriculumTerm } from "../lib/curriculumStorage";
 
 function formatDateRange(startDate?: string, endDate?: string) {
   const format = (value: string) =>
@@ -58,8 +59,96 @@ function countLessons(term: CurriculumTerm) {
 
 export function CurriculumDetailPage() {
   const { id } = useParams();
-  const curriculum = getCurriculumById(id);
+  const [curriculum, setCurriculum] = useState<Curriculum | undefined>(() => getCurriculumById(id));
   const [selectedTermId, setSelectedTermId] = useState<string | undefined>(() => curriculum?.structure[0]?.id);
+
+  const persistCurriculum = (nextCurriculum: Curriculum) => {
+    saveCurriculum(nextCurriculum);
+    setCurriculum(nextCurriculum);
+  };
+
+  const addTerm = (name: string) => {
+    if (!curriculum) return;
+    const trimmedName = name.trim();
+    if (trimmedName && curriculum.structure.some((term) => term.name.toLowerCase() === trimmedName.toLowerCase())) return;
+    const nextTerm = {
+      id: `term-${Date.now()}`,
+      name: trimmedName || `Term ${curriculum.structure.length + 1}`,
+      classes: [],
+    };
+    persistCurriculum({ ...curriculum, structure: [...curriculum.structure, nextTerm] });
+    setSelectedTermId(nextTerm.id);
+  };
+
+  const addClassToTerm = (termId: string, name: string) => {
+    if (!curriculum) return;
+    const targetTerm = curriculum.structure.find((term) => term.id === termId);
+    const trimmedName = name.trim();
+    if (!targetTerm) return;
+    if (trimmedName && targetTerm.classes.some((cls) => cls.name.toLowerCase() === trimmedName.toLowerCase())) return;
+
+    const nextCurriculum = {
+      ...curriculum,
+      structure: curriculum.structure.map((term) =>
+        term.id === termId
+          ? {
+              ...term,
+              classes: [
+                ...term.classes,
+                {
+                  id: `class-${Date.now()}`,
+                  name: trimmedName || `Class ${term.classes.length + 1}`,
+                  courses: [],
+                },
+              ],
+            }
+          : term
+      ),
+    };
+    persistCurriculum(nextCurriculum);
+  };
+
+  const addDefaultGradesToTerm = (termId: string) => {
+    ["Grade 7", "Grade 8", "Grade 9"].forEach((grade) => addClassToTerm(termId, grade));
+  };
+
+  const addCourseToClass = (termId: string, classId: string, course: { name: string; code: string; description: string }) => {
+    if (!curriculum) return;
+    const trimmedName = course.name.trim();
+    const trimmedCode = course.code.trim();
+    if (!trimmedName || !trimmedCode) return;
+    const targetClass = curriculum.structure.find((term) => term.id === termId)?.classes.find((cls) => cls.id === classId);
+    if (!targetClass) return;
+    if (targetClass.courses.some((item) => item.name.toLowerCase() === trimmedName.toLowerCase() || item.code.toLowerCase() === trimmedCode.toLowerCase())) return;
+
+    const nextCurriculum = {
+      ...curriculum,
+      structure: curriculum.structure.map((term) =>
+        term.id === termId
+          ? {
+              ...term,
+              classes: term.classes.map((cls) =>
+                cls.id === classId
+                  ? {
+                      ...cls,
+                      courses: [
+                        ...cls.courses,
+                        {
+                          id: `course-${Date.now()}`,
+                          name: trimmedName,
+                          code: trimmedCode,
+                          description: course.description.trim() || undefined,
+                        },
+                      ],
+                    }
+                  : cls
+              ),
+            }
+          : term
+      ),
+    };
+    persistCurriculum(nextCurriculum);
+  };
 
   const totals = useMemo(() => {
     if (!curriculum) return { terms: 0, classes: 0, courses: 0 };
@@ -93,6 +182,7 @@ export function CurriculumDetailPage() {
   }
 
   const selectedTerm = curriculum.structure.find((term) => term.id === selectedTermId) ?? curriculum.structure[0];
+  const structureValid = totals.terms > 0 && totals.classes > 0 && totals.courses > 0;
   const termBreakdown = curriculum.structure.map((term, index) => ({
     label: term.name || `Term ${index + 1}`,
     value: countCourses(term),
@@ -167,8 +257,9 @@ export function CurriculumDetailPage() {
               <Settings className="h-4 w-4" />
               Curriculum Settings
             </Link>
-            <Link
-              to={`/curriculums/${curriculum.id}/edit`}
+            <button
+              type="button"
+              onClick={() => addTerm("")}
               className="inline-flex h-11 overflow-hidden rounded-lg bg-blue-600 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
             >
               <span className="inline-flex items-center gap-2 px-5">
@@ -178,7 +269,7 @@ export function CurriculumDetailPage() {
               <span className="grid w-11 place-items-center border-l border-white/20">
                 <ChevronDown className="h-4 w-4" />
               </span>
-            </Link>
+            </button>
           </div>
         </header>
 
@@ -239,7 +330,7 @@ export function CurriculumDetailPage() {
         </nav>
 
         {curriculum.structure.length === 0 ? (
-          <EmptyStructure curriculumId={curriculum.id} />
+          <EmptyStructure onAddTerm={addTerm} />
         ) : (
           <div className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)_330px]">
             <StructureTree
@@ -247,17 +338,30 @@ export function CurriculumDetailPage() {
               terms={curriculum.structure}
               selectedTermId={selectedTerm?.id}
               onSelectTerm={setSelectedTermId}
-              curriculumId={curriculum.id}
+              onAddTerm={addTerm}
             />
 
             <main className="rounded-lg border border-slate-200 bg-white">
-              {selectedTerm && <TermPanel curriculumId={curriculum.id} term={selectedTerm} />}
+              {selectedTerm && (
+                <TermPanel
+                  term={selectedTerm}
+                  onAddClass={addClassToTerm}
+                  onAddDefaultGrades={addDefaultGradesToTerm}
+                  onAddCourse={addCourseToClass}
+                />
+              )}
             </main>
 
             <aside className="space-y-5">
               <StructureOverview totalCourses={totals.courses} terms={termBreakdown} />
-              <QuickActions curriculumId={curriculum.id} />
-              <ValidCard />
+              <QuickActions
+                curriculumId={curriculum.id}
+                onAddTerm={() => addTerm("")}
+                onAddClass={() => selectedTerm && addClassToTerm(selectedTerm.id, "")}
+                onAddDefaultGrades={() => selectedTerm && addDefaultGradesToTerm(selectedTerm.id)}
+                canAssign={structureValid}
+              />
+              <ValidCard curriculumId={curriculum.id} isValid={structureValid} />
             </aside>
           </div>
         )}
@@ -285,13 +389,13 @@ function StructureTree({
   terms,
   selectedTermId,
   onSelectTerm,
-  curriculumId,
+  onAddTerm,
 }: {
   curriculumName: string;
   terms: CurriculumTerm[];
   selectedTermId?: string;
   onSelectTerm: (id: string) => void;
-  curriculumId: string;
+  onAddTerm: (name: string) => void;
 }) {
   return (
     <aside className="rounded-lg border border-slate-200 bg-white p-4">
@@ -341,18 +445,22 @@ function StructureTree({
         })}
       </div>
 
-      <Link
-        to={`/curriculums/${curriculumId}/edit`}
-        className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-blue-500 text-sm font-semibold text-blue-600 hover:bg-blue-50"
-      >
-        <Plus className="h-4 w-4" />
-        Add Term
-      </Link>
+      <InlineNameForm buttonLabel="Add Term" placeholder="Term or semester name" onSubmit={onAddTerm} />
     </aside>
   );
 }
 
-function TermPanel({ curriculumId, term }: { curriculumId: string; term: CurriculumTerm }) {
+function TermPanel({
+  term,
+  onAddClass,
+  onAddDefaultGrades,
+  onAddCourse,
+}: {
+  term: CurriculumTerm;
+  onAddClass: (termId: string, name: string) => void;
+  onAddDefaultGrades: (termId: string) => void;
+  onAddCourse: (termId: string, classId: string, course: { name: string; code: string; description: string }) => void;
+}) {
   const courses = countCourses(term);
   const lessons = countLessons(term);
   const assessments = countAssessments(term);
@@ -374,13 +482,16 @@ function TermPanel({ curriculumId, term }: { curriculumId: string; term: Curricu
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link to={`/curriculums/${curriculumId}/edit`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-blue-600 hover:bg-slate-50">
+            <button className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-blue-600 hover:bg-slate-50">
               <Edit3 className="h-4 w-4" />
               Edit
-            </Link>
-            <Link to={`/curriculums/${curriculumId}/edit`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-blue-600 hover:bg-slate-50">
-              Add Class
-            </Link>
+            </button>
+            <button
+              onClick={() => onAddDefaultGrades(term.id)}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-blue-600 hover:bg-slate-50"
+            >
+              Add Grades 7-9
+            </button>
             <button className="grid h-10 w-10 place-items-center rounded-lg border border-slate-300 text-blue-600 hover:bg-slate-50">
               <MoreVertical className="h-4 w-4" />
             </button>
@@ -408,45 +519,47 @@ function TermPanel({ curriculumId, term }: { curriculumId: string; term: Curricu
           </div>
           <div className="flex items-center gap-4">
             <button className="text-sm font-semibold text-blue-600">Expand All</button>
-            <Link to={`/curriculums/${curriculumId}/edit`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-blue-500 px-4 text-sm font-semibold text-blue-600 hover:bg-blue-50">
-              <Plus className="h-4 w-4" />
-              Add Course
-            </Link>
+            <span className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+              Add courses inside each class
+            </span>
           </div>
+        </div>
+
+        <div className="mb-4 rounded-lg border border-dashed border-blue-200 bg-blue-50/50 p-4">
+          <p className="mb-3 text-sm font-semibold text-slate-800">Add class or grade to {term.name}</p>
+          <InlineNameForm buttonLabel="Add Class / Grade" placeholder="Grade 7, Year 8, Form 1..." onSubmit={(name) => onAddClass(term.id, name)} compact />
         </div>
 
         <div className="space-y-4">
           {term.classes.map((cls) => (
-            <div key={cls.id} className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-[140px]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <p className="font-semibold text-slate-900">{cls.name}</p>
+            <div key={cls.id} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-[140px]">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <p className="font-semibold text-slate-900">{cls.name}</p>
+                  </div>
+                  <p className="ml-4 mt-1 text-sm text-slate-500">
+                    {cls.courses.length} Course{cls.courses.length === 1 ? "" : "s"}
+                  </p>
                 </div>
-                <p className="ml-4 mt-1 text-sm text-slate-500">
-                  {cls.courses.length} Course{cls.courses.length === 1 ? "" : "s"}
-                </p>
+
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                  {cls.courses.length === 0 ? (
+                    <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-medium text-slate-500">No courses added</span>
+                  ) : (
+                    cls.courses.map((course) => (
+                      <span key={course.id} className="rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-slate-600">
+                        {course.name}
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                <ChevronRight className="hidden h-5 w-5 shrink-0 text-slate-400 lg:block" />
               </div>
 
-              <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-                {cls.courses.length === 0 ? (
-                  <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-medium text-slate-500">No courses added</span>
-                ) : (
-                  cls.courses.map((course) => (
-                    <span key={course.id} className="rounded-md bg-blue-50 px-3 py-2 text-xs font-medium text-slate-600">
-                      {course.name}
-                    </span>
-                  ))
-                )}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-4 text-sm font-semibold text-blue-600">
-                <Link to={`/curriculums/${curriculumId}/edit`} className="inline-flex items-center gap-1">
-                  <Plus className="h-4 w-4" />
-                  Add Course
-                </Link>
-                <ChevronRight className="h-5 w-5 text-slate-400" />
-              </div>
+              <CourseInlineForm onSubmit={(course) => onAddCourse(term.id, cls.id, course)} />
             </div>
           ))}
         </div>
@@ -454,10 +567,106 @@ function TermPanel({ curriculumId, term }: { curriculumId: string; term: Curricu
         {term.classes.length === 0 && (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
             <p className="font-semibold text-slate-800">No classes in this term yet</p>
-            <p className="mt-1 text-sm text-slate-500">Edit the curriculum to add classes and courses.</p>
+            <p className="mt-1 text-sm text-slate-500">Add the first class above, then attach courses inside it.</p>
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function InlineNameForm({
+  buttonLabel,
+  placeholder,
+  onSubmit,
+  compact = false,
+}: {
+  buttonLabel: string;
+  placeholder: string;
+  onSubmit: (name: string) => void;
+  compact?: boolean;
+}) {
+  const [name, setName] = useState("");
+
+  const submit = () => {
+    onSubmit(name);
+    setName("");
+  };
+
+  return (
+    <div className={`mt-5 flex flex-col gap-2 ${compact ? "mt-0 sm:flex-row" : ""}`}>
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          }
+        }}
+        placeholder={placeholder}
+        className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
+      <button
+        type="button"
+        onClick={submit}
+        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-blue-500 px-4 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+      >
+        <Plus className="h-4 w-4" />
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
+function CourseInlineForm({
+  onSubmit,
+}: {
+  onSubmit: (course: { name: string; code: string; description: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [description, setDescription] = useState("");
+
+  const submit = () => {
+    if (!name.trim() || !code.trim()) return;
+    onSubmit({ name, code, description });
+    setName("");
+    setCode("");
+    setDescription("");
+  };
+
+  return (
+    <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 p-3">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-[0px] text-slate-500">Add course to this class</p>
+      <div className="grid gap-2 lg:grid-cols-[1fr_0.45fr_1.2fr_auto]">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Course name"
+          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <input
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          placeholder="Code"
+          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <input
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="Optional notes"
+          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
     </div>
   );
 }
@@ -518,12 +727,24 @@ function StructureOverview({ totalCourses, terms }: { totalCourses: number; term
   );
 }
 
-function QuickActions({ curriculumId }: { curriculumId: string }) {
+function QuickActions({
+  curriculumId,
+  onAddTerm,
+  onAddClass,
+  onAddDefaultGrades,
+  canAssign,
+}: {
+  curriculumId: string;
+  onAddTerm: () => void;
+  onAddClass: () => void;
+  onAddDefaultGrades: () => void;
+  canAssign: boolean;
+}) {
   const actions = [
-    { title: "Add Term / Semester", description: "Define academic periods", icon: CalendarDays },
-    { title: "Add Class / Grade", description: "Create or import classes", icon: GraduationCap },
-    { title: "Add Course", description: "Attach subjects to classes", icon: BookOpen },
-    { title: "Reorder Structure", description: "Drag and drop to organize", icon: ListTodo },
+    { title: "Add Term / Semester", description: "Define academic periods", icon: CalendarDays, onClick: onAddTerm },
+    { title: "Add Class / Grade", description: "Create one class in selected term", icon: GraduationCap, onClick: onAddClass },
+    { title: "Add Grades 7-9", description: "Create the standard grade set", icon: BookOpen, onClick: onAddDefaultGrades },
+    { title: "Reorder Structure", description: "Drag and drop to organize", icon: ListTodo, onClick: undefined },
   ];
 
   return (
@@ -531,10 +752,12 @@ function QuickActions({ curriculumId }: { curriculumId: string }) {
       <h2 className="mb-4 text-lg font-semibold text-slate-900">Quick Actions</h2>
       <div className="space-y-3">
         {actions.map((action) => (
-          <Link
+          <button
+            type="button"
             key={action.title}
-            to={`/curriculums/${curriculumId}/edit`}
-            className="flex items-center gap-4 rounded-lg bg-slate-50 p-4 hover:bg-blue-50"
+            onClick={action.onClick}
+            disabled={!action.onClick}
+            className="flex w-full items-center gap-4 rounded-lg bg-slate-50 p-4 text-left hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-cyan-50 text-teal-600">
               <action.icon className="h-6 w-6" />
@@ -543,32 +766,50 @@ function QuickActions({ curriculumId }: { curriculumId: string }) {
               <p className="font-semibold text-slate-900">{action.title}</p>
               <p className="mt-1 text-sm text-slate-500">{action.description}</p>
             </div>
-          </Link>
+          </button>
         ))}
       </div>
+      <Link
+        to={`/curriculums/${curriculumId}/assign`}
+        className={`mt-4 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold ${
+          canAssign
+            ? "bg-blue-600 text-white hover:bg-blue-700"
+            : "pointer-events-none bg-slate-100 text-slate-400"
+        }`}
+      >
+        <Send className="h-4 w-4" />
+        Assign Curriculum to Schools
+      </Link>
     </section>
   );
 }
 
-function ValidCard() {
+function ValidCard({ curriculumId, isValid }: { curriculumId: string; isValid: boolean }) {
   return (
-    <section className="rounded-lg border border-emerald-100 bg-emerald-50 p-5">
+    <section className={`rounded-lg border p-5 ${isValid ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
       <div className="flex gap-4">
-        <ShieldCheck className="h-9 w-9 shrink-0 text-emerald-600" />
+        <ShieldCheck className={`h-9 w-9 shrink-0 ${isValid ? "text-emerald-600" : "text-amber-600"}`} />
         <div>
-          <h2 className="font-semibold text-slate-900">Structure is valid</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">All required components are in place.</p>
-          <button className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-            Learn more
+          <h2 className="font-semibold text-slate-900">{isValid ? "Structure is valid" : "Structure needs courses"}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {isValid
+              ? "All required components are in place. This curriculum can now be assigned to schools."
+              : "Add at least one term, class, and course before assigning this curriculum."}
+          </p>
+          <Link
+            to={`/curriculums/${curriculumId}/assign`}
+            className={`mt-3 inline-flex items-center gap-2 text-sm font-semibold ${isValid ? "text-blue-600" : "pointer-events-none text-slate-400"}`}
+          >
+            Continue to assignment
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Link>
         </div>
       </div>
     </section>
   );
 }
 
-function EmptyStructure({ curriculumId }: { curriculumId: string }) {
+function EmptyStructure({ onAddTerm }: { onAddTerm: (name: string) => void }) {
   return (
     <div className="rounded-lg border-2 border-dashed border-slate-300 bg-white p-12 text-center">
       <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-blue-50 text-blue-600">
@@ -578,13 +819,9 @@ function EmptyStructure({ curriculumId }: { curriculumId: string }) {
       <p className="mx-auto mb-6 max-w-md text-sm text-slate-600">
         Add terms, classes, and courses to turn this curriculum into a visual learning plan.
       </p>
-      <Link
-        to={`/curriculums/${curriculumId}/edit`}
-        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 font-semibold text-white hover:bg-blue-700"
-      >
-        <Plus className="h-4 w-4" />
-        Build Structure
-      </Link>
+      <div className="mx-auto max-w-xl">
+        <InlineNameForm buttonLabel="Build Structure" placeholder="Start with Term 1, Semester 1..." onSubmit={onAddTerm} compact />
+      </div>
     </div>
   );
 }
