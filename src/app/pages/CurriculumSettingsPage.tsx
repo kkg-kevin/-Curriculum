@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router";
 import {
   Bell,
   Box,
@@ -115,15 +116,16 @@ export function CurriculumSettingsPage() {
           {[
             { label: "General", icon: Settings, active: true },
             { label: "Governance", icon: LockKeyhole },
-            { label: "Version Control", icon: History },
+            { label: "Version Control", icon: History, href: "/settings/version-control" },
             { label: "Supplement Rules", icon: Box },
             { label: "Deployment", icon: BookIcon },
             { label: "Integrations", icon: RefreshCw },
             { label: "Notifications", icon: Bell },
             { label: "Audit", icon: ClipboardCheck },
           ].map((tab) => (
-            <button
+            <Link
               key={tab.label}
+              to={tab.href || "/settings"}
               className={`inline-flex h-14 min-w-max items-center gap-2 border-b-2 px-6 text-sm font-semibold ${
                 tab.active
                   ? "border-blue-600 text-blue-600"
@@ -132,7 +134,7 @@ export function CurriculumSettingsPage() {
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
-            </button>
+            </Link>
           ))}
         </nav>
 
