@@ -297,24 +297,59 @@ export function CreateCurriculumWizard() {
     ]);
   };
 
+  const addClassWithName = (termId: string, name: string) => {
+    const existingClassNames = new Set(classes.filter((cls) => cls.termId === termId).map((cls) => cls.name.toLowerCase()));
+    if (existingClassNames.has(name.toLowerCase())) return;
+    setClasses((current) => [
+      ...current,
+      {
+        id: `class-${Date.now()}-${name.replace(/\s+/g, "-").toLowerCase()}`,
+        termId,
+        name,
+        order: current.filter((cls) => cls.termId === termId).length,
+      },
+    ]);
+  };
+
+  const addDefaultGradesToTerm = (termId: string) => {
+    ["Grade 7", "Grade 8", "Grade 9"].forEach((grade) => addClassWithName(termId, grade));
+  };
+
+  const updateClassName = (id: string, name: string) => {
+    setClasses(classes.map((item) => (item.id === id ? { ...item, name } : item)));
+  };
+
   const removeClass = (id: string) => {
     setClasses(classes.filter((cls) => cls.id !== id));
     setCourses(courses.filter((course) => course.classId !== id));
   };
 
-  const addCourseFromDropdown = (classId: string, courseName: string) => {
-    const courseTemplate = AVAILABLE_COURSES.find((course) => course.name === courseName);
-    if (!courseTemplate) return;
+  const addCourseToClass = (classId: string, name: string, code: string, description = "") => {
+    const trimmedName = name.trim();
+    const trimmedCode = code.trim();
+    if (!trimmedName || !trimmedCode) return;
+    const classCourses = courses.filter((course) => course.classId === classId);
+    if (classCourses.some((course) => course.name.toLowerCase() === trimmedName.toLowerCase())) return;
     setCourses([
       ...courses,
       {
-        id: `course-${Date.now()}`,
+        id: `course-${Date.now()}-${trimmedCode.toLowerCase()}`,
         classId,
-        name: courseTemplate.name,
-        code: courseTemplate.code,
-        description: "",
+        name: trimmedName,
+        code: trimmedCode,
+        description,
       },
     ]);
+  };
+
+  const addCourseFromDropdown = (classId: string, courseName: string) => {
+    const courseTemplate = AVAILABLE_COURSES.find((course) => course.name === courseName);
+    if (!courseTemplate) return;
+    addCourseToClass(classId, courseTemplate.name, courseTemplate.code);
+  };
+
+  const addCustomCourse = (classId: string, course: { name: string; code: string; description: string }) => {
+    addCourseToClass(classId, course.name, course.code, course.description);
   };
 
   const removeCourse = (id: string) => {
@@ -601,9 +636,24 @@ export function CreateCurriculumWizard() {
                   <h2 className="text-xl font-semibold text-slate-900">What's next?</h2>
                   <p className="mt-2 text-sm text-slate-500">You'll define the academic structure, classes, and courses.</p>
                   <div className="mt-6 space-y-5">
-                    <NextItem icon={CalendarDays} title="Add Terms & Periods" description="Define the academic periods in this curriculum." />
-                    <NextItem icon={Users} title="Add Classes / Grades" description="Set up the grade levels for this curriculum." />
-                    <NextItem icon={ClipboardList} title="Add Courses" description="Attach subjects to each class and term." />
+                    <NextItem
+                      icon={CalendarDays}
+                      title="Add Terms & Periods"
+                      description="Define the academic periods in this curriculum."
+                      onClick={() => setCurrentStep(2)}
+                    />
+                    <NextItem
+                      icon={Users}
+                      title="Add Classes / Grades"
+                      description="Set up the grade levels for this curriculum."
+                      onClick={() => setCurrentStep(3)}
+                    />
+                    <NextItem
+                      icon={ClipboardList}
+                      title="Add Courses"
+                      description="Attach subjects to each class and term."
+                      onClick={() => setCurrentStep(3)}
+                    />
                   </div>
                 </section>
               </aside>
@@ -655,22 +705,64 @@ export function CreateCurriculumWizard() {
         {currentStep === 3 && (
           <WizardPanel title="Classes & Courses" description="Add grades/classes under each period, then attach the subjects they will study.">
             <div className="space-y-5">
+              <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 md:grid-cols-3">
+                <SetupStat label="Terms / Periods" value={terms.length} />
+                <SetupStat label="Classes / Grades" value={classes.length} />
+                <SetupStat label="Courses" value={courses.length} />
+              </div>
+
+              {terms.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                  <CalendarDays className="mx-auto mb-3 h-8 w-8 text-blue-600" />
+                  <p className="font-semibold text-slate-900">Add a term or period first</p>
+                  <p className="mt-1 text-sm text-slate-500">Classes and courses are organized under each academic period.</p>
+                  <button
+                    onClick={() => setCurrentStep(2)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Terms & Periods
+                  </button>
+                </div>
+              )}
+
               {terms.map((term) => {
                 const termClasses = classes.filter((cls) => cls.termId === term.id);
                 return (
                   <section key={term.id} className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <h3 className="font-semibold text-slate-900">{term.name || "Unnamed Term"}</h3>
-                        <p className="text-xs text-slate-500">{termClasses.length} class{termClasses.length !== 1 ? "es" : ""} added</p>
+                        <p className="text-xs text-slate-500">
+                          {termClasses.length} class{termClasses.length !== 1 ? "es" : ""} added - {termClasses.reduce(
+                            (total, cls) => total + courses.filter((course) => course.classId === cls.id).length,
+                            0
+                          )} courses
+                        </p>
                       </div>
-                      <button onClick={() => addClass(term.id)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
-                        <Plus className="h-4 w-4" />
-                        Add Class
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => addDefaultGradesToTerm(term.id)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700"
+                        >
+                          <Users className="h-4 w-4" />
+                          Add Grades 7-9
+                        </button>
+                        <button onClick={() => addClass(term.id)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                          <Plus className="h-4 w-4" />
+                          Add Class
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-3">
+                      {termClasses.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center">
+                          <p className="font-semibold text-slate-900">No classes or grades yet</p>
+                          <p className="mt-1 text-sm text-slate-500">Add one class manually or start with Grades 7-9.</p>
+                        </div>
+                      )}
+
                       {termClasses.map((cls, index) => {
                         const classCourses = courses.filter((course) => course.classId === cls.id);
                         const availableCourses = AVAILABLE_COURSES.filter((course) => !classCourses.some((added) => added.name === course.name));
@@ -681,7 +773,7 @@ export function CreateCurriculumWizard() {
                               <span className="w-6 text-sm font-semibold text-slate-500">#{index + 1}</span>
                               <input
                                 value={cls.name}
-                                onChange={(event) => setClasses(classes.map((item) => (item.id === cls.id ? { ...item, name: event.target.value } : item)))}
+                                onChange={(event) => updateClassName(cls.id, event.target.value)}
                                 placeholder="Class name (e.g., Grade 7)"
                                 className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                               />
@@ -690,22 +782,33 @@ export function CreateCurriculumWizard() {
                               </button>
                             </div>
 
-                            <select
-                              value=""
-                              onChange={(event) => {
-                                if (event.target.value) addCourseFromDropdown(cls.id, event.target.value);
-                              }}
-                              className="mb-3 h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                            >
-                              <option value="">Choose a course to add...</option>
-                              {availableCourses.map((course) => (
-                                <option key={course.code} value={course.name}>
-                                  {course.name} ({course.code})
-                                </option>
-                              ))}
-                            </select>
+                            <div className="mb-3 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
+                              <div>
+                                <label className="mb-1 block text-xs font-semibold text-slate-600">Add preset course</label>
+                                <select
+                                  value=""
+                                  onChange={(event) => {
+                                    if (event.target.value) addCourseFromDropdown(cls.id, event.target.value);
+                                  }}
+                                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                >
+                                  <option value="">Choose a course...</option>
+                                  {availableCourses.map((course) => (
+                                    <option key={course.code} value={course.name}>
+                                      {course.name} ({course.code})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <CourseCreator onAdd={(course) => addCustomCourse(cls.id, course)} />
+                            </div>
 
                             <div className="space-y-2">
+                              {classCourses.length === 0 && (
+                                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                                  No courses added yet.
+                                </div>
+                              )}
                               {classCourses.map((course) => (
                                 <div key={course.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -896,9 +999,23 @@ function TagInput({
   );
 }
 
-function NextItem({ icon: Icon, title, description }: { icon: typeof CalendarDays; title: string; description: string }) {
+function NextItem({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+}: {
+  icon: typeof CalendarDays;
+  title: string;
+  description: string;
+  onClick?: () => void;
+}) {
   return (
-    <div className="flex gap-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full gap-4 rounded-lg p-2 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
+    >
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600">
         <Icon className="h-5 w-5" />
       </div>
@@ -906,6 +1023,67 @@ function NextItem({ icon: Icon, title, description }: { icon: typeof CalendarDay
         <p className="font-semibold text-slate-900">{title}</p>
         <p className="mt-1 text-sm text-slate-500">{description}</p>
       </div>
+    </button>
+  );
+}
+
+function SetupStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-white px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0px] text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function CourseCreator({
+  onAdd,
+}: {
+  onAdd: (course: { name: string; code: string; description: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [description, setDescription] = useState("");
+
+  const submit = () => {
+    if (!name.trim() || !code.trim()) return;
+    onAdd({ name, code, description });
+    setName("");
+    setCode("");
+    setDescription("");
+  };
+
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-semibold text-slate-600">Add custom course</label>
+      <div className="grid gap-2 md:grid-cols-[1fr_0.65fr_auto]">
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Course name"
+          className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <input
+          value={code}
+          onChange={(event) => setCode(event.target.value)}
+          placeholder="Code"
+          className="h-10 rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        />
+        <button
+          type="button"
+          onClick={submit}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white hover:bg-slate-800"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+      <input
+        value={description}
+        onChange={(event) => setDescription(event.target.value)}
+        placeholder="Optional notes or learning objectives"
+        className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
     </div>
   );
 }
