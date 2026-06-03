@@ -12,6 +12,17 @@ import { SchoolDetailPage } from "./pages/SchoolDetailPage";
 import { SchoolsPage } from "./pages/SchoolsPage";
 import { VersionControlPage } from "./pages/VersionControlPage";
 
+function PlaceholderPage({ title }: { title: string }) {
+  return (
+    <div className="min-h-full bg-[#F7F9FC] p-8">
+      <div className="rounded-lg border border-slate-200 bg-white p-8">
+        <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
+        <p className="mt-2 text-slate-600">This workspace is coming soon.</p>
+      </div>
+    </div>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -25,6 +36,11 @@ export const router = createBrowserRouter([
       { path: "curriculums/:id/assign", Component: AssignCurriculumPage },
       { path: "schools", Component: SchoolsPage },
       { path: "schools/:id", Component: SchoolDetailPage },
+      { path: "learners", Component: () => <PlaceholderPage title="Learners" /> },
+      { path: "teachers", Component: () => <PlaceholderPage title="Teachers" /> },
+      { path: "classes", Component: () => <PlaceholderPage title="Classes" /> },
+      { path: "assessments", Component: () => <PlaceholderPage title="Assessments" /> },
+      { path: "reports", Component: () => <PlaceholderPage title="Reports" /> },
       { path: "assignments", Component: AssignmentsPage },
       { path: "assignments/create", Component: AssignCurriculumPage },
       { path: "deployments/supplementary-course", Component: DeploySupplementaryCoursePage },
