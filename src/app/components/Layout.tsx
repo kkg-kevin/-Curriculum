@@ -21,7 +21,7 @@ export function Layout() {
               <GraduationCap className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg">EduManage</h1>
+              <h1 className="font-semibold text-lg">Digifunzi</h1>
               <p className="text-xs text-blue-300">Curriculum System</p>
             </div>
           </div>
@@ -58,7 +58,7 @@ export function Layout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">Admin User</p>
-              <p className="text-xs text-blue-300 truncate">admin@school.com</p>
+              <p className="text-xs text-blue-300 truncate">admin@digifunzi.com</p>
             </div>
           </div>
         </div>
